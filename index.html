@@ -44,6 +44,7 @@
             height: 100%;
             overflow: auto;
             min-height: 80px;
+            display: block; /* 블록 요소로 만들어서 전체 공간 차지 */
         }
         th {
             background-color: #f2f2f2;
@@ -112,10 +113,13 @@
         .button-container {
             text-align: center;
             margin-bottom: 20px;
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 10px;
         }
         .button {
             padding: 10px 20px;
-            margin: 0 10px;
             background-color: #4CAF50;
             color: white;
             border: none;
@@ -126,7 +130,7 @@
         .button:hover {
             background-color: #45a049;
         }
-        #datePickerContainer, #tableSettingsContainer {
+        #datePickerContainer, #tableSettingsContainer, #rowHeightContainer {
             display: none;
             text-align: center;
             margin: 20px 0;
@@ -155,6 +159,13 @@
             border: 1px solid #ddd;
             border-radius: 4px;
         }
+        .height-input {
+            width: 80px;
+            padding: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin: 0 5px;
+        }
     </style>
 </head>
 <body>
@@ -166,6 +177,7 @@
             <button id="dateSettingButton" class="button">기준일 설정</button>
             <button id="saveButton" class="button">저장</button>
             <button id="tableSettingsButton" class="button">테이블 설정</button>
+            <button id="rowHeightButton" class="button">행 높이 설정</button>
         </div>
         
         <div id="datePickerContainer">
@@ -183,6 +195,14 @@
                 <input type="number" id="containerWidthInput" min="500" step="50" value="1200">
             </div>
             <button id="applySettingsButton" class="button">적용</button>
+        </div>
+        
+        <div id="rowHeightContainer">
+            <div class="settings-row">
+                <label for="rowHeightInput">행 높이 (px):</label>
+                <input type="number" id="rowHeightInput" min="10" max="500" step="10" value="120">
+            </div>
+            <button id="applyRowHeightButton" class="button">적용</button>
         </div>
         
         <h1>주간 업무 일정표</h1>
@@ -347,6 +367,12 @@
                 </tr>
             </tbody>
         </table>
+        
+        <!-- 디버그 정보 표시 영역 -->
+        <div id="debugInfo" style="margin-top: 20px; padding: 10px; background-color: #f0f0f0; display: none;">
+            <h3>디버그 정보</h3>
+            <div id="debugContent"></div>
+        </div>
     </div>
 
     <script>
@@ -363,6 +389,39 @@
             const tableWidthInput = document.getElementById('tableWidthInput');
             const containerWidthInput = document.getElementById('containerWidthInput');
             const applySettingsButton = document.getElementById('applySettingsButton');
+            const rowHeightButton = document.getElementById('rowHeightButton');
+            const rowHeightContainer = document.getElementById('rowHeightContainer');
+            const rowHeightInput = document.getElementById('rowHeightInput');
+            const applyRowHeightButton = document.getElementById('applyRowHeightButton');
+            const debugInfo = document.getElementById('debugInfo');
+            const debugContent = document.getElementById('debugContent');
+            
+            // 디버그 모드 설정 (true로 설정하면 디버그 정보가 표시됩니다)
+            const DEBUG_MODE = false;
+            
+            // 디버그 함수
+            function debug(message, data) {
+                if (!DEBUG_MODE) return;
+                
+                debugInfo.style.display = 'block';
+                const timestamp = new Date().toLocaleTimeString();
+                let dataStr = '';
+                
+                if (data) {
+                    try {
+                        dataStr = JSON.stringify(data, null, 2);
+                    } catch (error) {
+                        dataStr = String(data);
+                    }
+                }
+                
+                const logItem = document.createElement('div');
+                logItem.innerHTML = `<strong>[${timestamp}]</strong> ${message}<br><pre>${dataStr}</pre>`;
+                debugContent.appendChild(logItem);
+                
+                // 스크롤을 아래로 이동
+                debugInfo.scrollTop = debugInfo.scrollHeight;
+            }
             
             // 현재 날짜로 기본값 설정
             const today = new Date();
@@ -420,7 +479,9 @@
                         e.preventDefault();
                         
                         // <br> 태그 삽입
-                        document.execCommand('insertHTML', false, '<br><br>');
+                        document.execCommand('insertHTML', false, '<br>');
+                        
+                        debug("Enter 키 눌림 - <br> 태그 삽입됨", this.innerHTML);
                     }
                 });
             });
@@ -433,6 +494,11 @@
             // 기준일 설정 버튼 이벤트 리스너
             dateSettingButton.addEventListener('click', function() {
                 toggleDatePicker();
+            });
+            
+            // 행 높이 설정 버튼 이벤트 리스너
+            rowHeightButton.addEventListener('click', function() {
+                toggleRowHeightContainer();
             });
             
             // 날짜 확인 버튼 이벤트 리스너
@@ -462,6 +528,13 @@
             if (applySettingsButton) {
                 applySettingsButton.addEventListener('click', function() {
                     applyTableSettings();
+                });
+            }
+            
+            // 행 높이 적용 버튼 이벤트 리스너
+            if (applyRowHeightButton) {
+                applyRowHeightButton.addEventListener('click', function() {
+                    applyRowHeight();
                 });
             }
 
@@ -498,11 +571,13 @@
                 const row = currentRowResizer.closest('tr');
                 const diff = e.pageY - startY;
                 
-                const newHeight = Math.max(30, startHeight + diff);  // 최소 높이 30px
+                const newHeight = Math.max(10, startHeight + diff);  // 최소 높이 10px
                 row.style.height = newHeight + 'px';
                 
                 // 현재 높이 저장
                 row.dataset.customHeight = newHeight;
+                
+                debug("행 높이 변경", { rowIndex: row.rowIndex, height: newHeight });
             }
 
             function stopRowResize() {
@@ -512,6 +587,48 @@
                 
                 // 행 높이 변경 후 저장
                 saveRowHeights();
+            }
+            
+            // 행 높이 설정 토글 함수
+            function toggleRowHeightContainer() {
+                if (rowHeightContainer.style.display === 'none' || rowHeightContainer.style.display === '') {
+                    rowHeightContainer.style.display = 'block';
+                    datePickerContainer.style.display = 'none';
+                    tableSettingsContainer.style.display = 'none';
+                    
+                    // 현재 행 높이 평균값 가져오기
+                    const rows = table.querySelectorAll('tbody tr');
+                    let totalHeight = 0;
+                    rows.forEach(row => {
+                        totalHeight += parseInt(row.offsetHeight) || 120;
+                    });
+                    const avgHeight = Math.round(totalHeight / rows.length);
+                    rowHeightInput.value = avgHeight;
+                } else {
+                    rowHeightContainer.style.display = 'none';
+                }
+            }
+            
+            // 행 높이 적용 함수
+            function applyRowHeight() {
+                const height = parseInt(rowHeightInput.value) || 120;
+                if (height < 10) {
+                    alert('행 높이는 최소 10px 이상이어야 합니다.');
+                    return;
+                }
+                
+                // 모든 행에 동일한 높이 적용
+                const rows = table.querySelectorAll('tbody tr');
+                rows.forEach(row => {
+                    row.style.height = height + 'px';
+                    row.dataset.customHeight = height;
+                });
+                
+                // 행 높이 저장
+                saveRowHeights();
+                
+                rowHeightContainer.style.display = 'none';
+                alert('행 높이가 변경되었습니다.');
             }
             
             // 행 높이 저장 함수
@@ -528,6 +645,7 @@
                 
                 // 로컬 스토리지에 저장
                 localStorage.setItem('rowHeights', JSON.stringify(rowHeights));
+                debug("행 높이 저장됨", rowHeights);
             }
             
             // 저장된 행 높이 적용 함수
@@ -545,8 +663,11 @@
                             row.dataset.customHeight = rowHeights[index];
                         }
                     });
+                    
+                    debug("저장된 행 높이 적용됨", rowHeights);
                 } catch (error) {
                     console.error('행 높이 로드 오류:', error);
+                    debug("행 높이 로드 오류", error);
                 }
             }
             
@@ -574,6 +695,7 @@
                 if (datePickerContainer.style.display === 'none' || datePickerContainer.style.display === '') {
                     datePickerContainer.style.display = 'block';
                     tableSettingsContainer.style.display = 'none';
+                    rowHeightContainer.style.display = 'none';
                 } else {
                     datePickerContainer.style.display = 'none';
                 }
@@ -584,6 +706,7 @@
                 if (tableSettingsContainer.style.display === 'none' || tableSettingsContainer.style.display === '') {
                     tableSettingsContainer.style.display = 'block';
                     datePickerContainer.style.display = 'none';
+                    rowHeightContainer.style.display = 'none';
                     
                     // 현재 값 로드
                     const savedSettings = loadTableSettings();
@@ -715,6 +838,9 @@
                 
                 // 행 높이도 함께 저장
                 saveRowHeights();
+                
+                // 디버그 정보
+                debug("일정 데이터 저장됨", scheduleData);
             }
             
             // 저장된 데이터 불러오기 함수
@@ -724,6 +850,7 @@
                 
                 try {
                     const scheduleData = JSON.parse(savedData);
+                    debug("저장된 일정 데이터 불러옴", scheduleData);
                     
                     // 헤더(날짜) 복원
                     const headerRow = table.querySelector('thead tr');
@@ -751,12 +878,14 @@
                             const contentDiv = cell.querySelector('div[contenteditable="true"]');
                             if (contentDiv && scheduleData.content[rowIndex] && scheduleData.content[rowIndex][cellIndex]) {
                                 contentDiv.innerHTML = scheduleData.content[rowIndex][cellIndex];
+                                debug(`셀 내용 복원 (행:${rowIndex}, 열:${cellIndex})`, contentDiv.innerHTML);
                             }
                         });
                     });
                     
                 } catch (error) {
                     console.error('데이터 로드 오류:', error);
+                    debug("데이터 로드 오류", error);
                 }
                 
                 // 행 높이 복원
