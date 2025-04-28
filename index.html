@@ -34,7 +34,6 @@
             height: 120px;
             min-width: 120px;
             position: relative;
-            overflow: visible; /* 스크롤바 제거 */
         }
         /* 내용 셀(2행 2열~5행 7열)만 왼쪽 정렬 */
         tbody td:not(.name-column) div[contenteditable="true"] {
@@ -42,7 +41,6 @@
             padding-left: 5px;
             white-space: pre-wrap; /* 줄바꿈 보존 */
             height: 100%;
-            overflow: visible; /* 스크롤바 제거 */
             min-height: 80px;
             display: block; /* 블록 요소로 만들어서 전체 공간 차지 */
         }
@@ -167,7 +165,7 @@
             <button id="dateSettingButton" class="button">기준일 설정</button>
             <button id="saveButton" class="button">저장</button>
             <button id="tableSettingsButton" class="button">테이블 설정</button>
-            <button id="rowHeightButton" class="button">1행 높이 설정</button>
+            <button id="rowHeightButton" class="button">행 높이 설정</button>
         </div>
         
         <div id="datePickerContainer">
@@ -189,7 +187,7 @@
         
         <div id="rowHeightContainer">
             <div class="settings-row">
-                <label for="rowHeightInput">1행 높이 (px):</label>
+                <label for="rowHeightInput">행 높이 (px):</label>
                 <input type="number" id="rowHeightInput" min="10" max="500" step="10" value="120">
             </div>
             <button id="applyRowHeightButton" class="button">적용</button>
@@ -379,10 +377,10 @@
             const formattedDate = today.toISOString().split('T')[0];
             datePicker.value = formattedDate;
             
-            // 1행 높이 초기값 설정
-            const firstRow = table.querySelector('tbody tr:first-child');
-            if (firstRow) {
-                rowHeightInput.value = firstRow.offsetHeight || 120;
+            // 행 높이 초기값 설정
+            const tableRows = table.querySelectorAll('tbody tr');
+            if (tableRows.length > 0) {
+                rowHeightInput.value = tableRows[0].offsetHeight || 120;
             }
             
             // 열 크기 조절 기능
@@ -435,41 +433,31 @@
             });
             
             // 날짜 확인 버튼 이벤트 리스너
-            if (confirmDateButton) {
-                confirmDateButton.addEventListener('click', function() {
-                    setBaseDateAndUpdate();
-                    datePickerContainer.style.display = 'none';
-                });
-            }
+            confirmDateButton.addEventListener('click', function() {
+                setBaseDateAndUpdate();
+                datePickerContainer.style.display = 'none';
+            });
             
             // 저장 버튼 이벤트 리스너
-            if (saveButton) {
-                saveButton.addEventListener('click', function() {
-                    saveScheduleData();
-                    alert('일정이 저장되었습니다.');
-                });
-            }
+            saveButton.addEventListener('click', function() {
+                saveScheduleData();
+                alert('일정이 저장되었습니다.');
+            });
             
             // 테이블 설정 버튼 이벤트 리스너
-            if (tableSettingsButton) {
-                tableSettingsButton.addEventListener('click', function() {
-                    toggleTableSettings();
-                });
-            }
+            tableSettingsButton.addEventListener('click', function() {
+                toggleTableSettings();
+            });
             
             // 테이블 설정 적용 버튼 이벤트 리스너
-            if (applySettingsButton) {
-                applySettingsButton.addEventListener('click', function() {
-                    applyTableSettings();
-                });
-            }
+            applySettingsButton.addEventListener('click', function() {
+                applyTableSettings();
+            });
             
             // 행 높이 적용 버튼 이벤트 리스너
-            if (applyRowHeightButton) {
-                applyRowHeightButton.addEventListener('click', function() {
-                    applyRowHeight();
-                });
-            }
+            applyRowHeightButton.addEventListener('click', function() {
+                applyRowHeight();
+            });
 
             function handleColResize(e) {
                 if (!isColResizing) return;
@@ -504,17 +492,17 @@
                     datePickerContainer.style.display = 'none';
                     tableSettingsContainer.style.display = 'none';
                     
-                    // 현재 1행 높이 가져오기
-                    const firstRow = table.querySelector('tbody tr:first-child');
-                    if (firstRow) {
-                        rowHeightInput.value = firstRow.offsetHeight || 120;
+                    // 현재 행 높이 가져오기
+                    const tableRows = table.querySelectorAll('tbody tr');
+                    if (tableRows.length > 0) {
+                        rowHeightInput.value = tableRows[0].offsetHeight || 120;
                     }
                 } else {
                     rowHeightContainer.style.display = 'none';
                 }
             }
             
-            // 1행 높이 적용 함수
+            // 행 높이 적용 함수
             function applyRowHeight() {
                 const height = parseInt(rowHeightInput.value) || 120;
                 if (height < 10) {
@@ -522,17 +510,17 @@
                     return;
                 }
                 
-                // 첫 번째 행에만 높이 적용
-                const firstRow = table.querySelector('tbody tr:first-child');
-                if (firstRow) {
-                    firstRow.style.height = height + 'px';
-                    
-                    // 1행 높이 저장
-                    localStorage.setItem('firstRowHeight', height);
-                }
+                // 모든 행에 높이 적용
+                const tableRows = table.querySelectorAll('tbody tr');
+                tableRows.forEach(row => {
+                    row.style.height = height + 'px';
+                });
+                
+                // 행 높이 저장
+                localStorage.setItem('rowHeight', height);
                 
                 rowHeightContainer.style.display = 'none';
-                alert('1행 높이가 변경되었습니다.');
+                alert('행 높이가 변경되었습니다.');
             }
             
             // 일정 초기화 함수 - 구분 행과 열을 제외한 내용 초기화
@@ -631,13 +619,13 @@
                 document.querySelector('.container').style.maxWidth = settings.containerWidth + 'px';
             }
             
-            // 저장된 1행 높이 적용
-            function applyStoredFirstRowHeight() {
-                const height = parseInt(localStorage.getItem('firstRowHeight')) || 120;
-                const firstRow = table.querySelector('tbody tr:first-child');
-                if (firstRow) {
-                    firstRow.style.height = height + 'px';
-                }
+            // 저장된 행 높이 적용
+            function applyStoredRowHeight() {
+                const height = parseInt(localStorage.getItem('rowHeight')) || 120;
+                const tableRows = table.querySelectorAll('tbody tr');
+                tableRows.forEach(row => {
+                    row.style.height = height + 'px';
+                });
             }
             
             // 기준일 설정 및 날짜 업데이트 함수
@@ -759,8 +747,8 @@
             // 저장된 테이블 설정 적용
             applyStoredTableSettings();
             
-            // 저장된 1행 높이 적용
-            applyStoredFirstRowHeight();
+            // 저장된 행 높이 적용
+            applyStoredRowHeight();
         });
     </script>
 </body>
