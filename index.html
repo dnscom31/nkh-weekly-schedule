@@ -428,7 +428,9 @@
                     currentRowResizer = this;
                     startY = e.pageY;
                     
-                    const row = this.parentElement.parentElement;
+                    // 수정된 부분: td -> tr 요소 찾기
+                    const cell = this.parentElement;
+                    const row = cell.parentElement;
                     startHeight = row.offsetHeight;
                     
                     document.addEventListener('mousemove', handleRowResize);
@@ -506,7 +508,9 @@
             function handleRowResize(e) {
                 if (!isRowResizing) return;
                 
-                const row = currentRowResizer.parentElement.parentElement;
+                // 수정된 부분: row 변수 찾기
+                const cell = currentRowResizer.parentElement;
+                const row = cell.parentElement;
                 const diff = e.pageY - startY;
                 
                 const newHeight = Math.max(30, startHeight + diff);  // 최소 높이 30px
