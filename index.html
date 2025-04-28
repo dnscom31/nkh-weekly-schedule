@@ -11,8 +11,9 @@
             padding: 0;
         }
         .container {
-            max-width: 1000px;
+            max-width: 1200px;
             margin: 0 auto;
+            overflow-x: auto;
         }
         h1 {
             text-align: center;
@@ -20,16 +21,18 @@
         }
         table {
             width: 100%;
+            min-width: 900px;
             table-layout: fixed;
             border-collapse: collapse;
             margin-bottom: 30px;
         }
         th, td {
             border: 1px solid #ddd;
-            padding: 8px;
+            padding: 12px;
             text-align: center;
             vertical-align: middle;
-            height: 80px;
+            height: 120px;
+            min-width: 120px;
             position: relative;
             overflow: hidden;
         }
@@ -41,6 +44,7 @@
             background-color: #f2f2f2;
             color: #c74a3c;
             font-weight: bold;
+            min-width: 140px;
         }
         .title {
             text-align: center;
@@ -112,14 +116,34 @@
         .button:hover {
             background-color: #45a049;
         }
-        #datePickerContainer {
+        #datePickerContainer, #tableSettingsContainer {
             display: none;
             text-align: center;
             margin: 20px 0;
+            padding: 15px;
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 4px;
         }
         #datePicker {
             padding: 8px;
             font-family: 'Malgun Gothic', sans-serif;
+        }
+        .settings-row {
+            margin: 10px 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .settings-row label {
+            margin-right: 10px;
+            font-weight: bold;
+        }
+        .settings-row input {
+            width: 100px;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
         }
     </style>
 </head>
@@ -131,11 +155,24 @@
             <button id="resetButton" class="button">일정 초기화</button>
             <button id="dateSettingButton" class="button">기준일 설정</button>
             <button id="saveButton" class="button">저장</button>
+            <button id="tableSettingsButton" class="button">테이블 설정</button>
         </div>
         
         <div id="datePickerContainer">
             <input type="date" id="datePicker">
             <button id="confirmDateButton" class="button">확인</button>
+        </div>
+        
+        <div id="tableSettingsContainer">
+            <div class="settings-row">
+                <label for="tableWidthInput">테이블 너비 (px):</label>
+                <input type="number" id="tableWidthInput" min="500" step="50" value="900">
+            </div>
+            <div class="settings-row">
+                <label for="containerWidthInput">컨테이너 너비 (px):</label>
+                <input type="number" id="containerWidthInput" min="500" step="50" value="1200">
+            </div>
+            <button id="applySettingsButton" class="button">적용</button>
         </div>
         
         <h1>주간 업무 일정표</h1>
@@ -342,6 +379,11 @@
             const datePicker = document.getElementById('datePicker');
             const confirmDateButton = document.getElementById('confirmDateButton');
             const saveButton = document.getElementById('saveButton');
+            const tableSettingsButton = document.getElementById('tableSettingsButton');
+            const tableSettingsContainer = document.getElementById('tableSettingsContainer');
+            const tableWidthInput = document.getElementById('tableWidthInput');
+            const containerWidthInput = document.getElementById('containerWidthInput');
+            const applySettingsButton = document.getElementById('applySettingsButton');
             
             // 현재 날짜로 기본값 설정
             const today = new Date();
@@ -415,6 +457,20 @@
                     alert('일정이 저장되었습니다.');
                 });
             }
+            
+            // 테이블 설정 버튼 이벤트 리스너
+            if (tableSettingsButton) {
+                tableSettingsButton.addEventListener('click', function() {
+                    toggleTableSettings();
+                });
+            }
+            
+            // 테이블 설정 적용 버튼 이벤트 리스너
+            if (applySettingsButton) {
+                applySettingsButton.addEventListener('click', function() {
+                    applyTableSettings();
+                });
+            }
 
             function handleColResize(e) {
                 if (!isColResizing) return;
@@ -481,9 +537,75 @@
             function toggleDatePicker() {
                 if (datePickerContainer.style.display === 'none' || datePickerContainer.style.display === '') {
                     datePickerContainer.style.display = 'block';
+                    tableSettingsContainer.style.display = 'none';
                 } else {
                     datePickerContainer.style.display = 'none';
                 }
+            }
+            
+            // 테이블 설정 토글 함수
+            function toggleTableSettings() {
+                if (tableSettingsContainer.style.display === 'none' || tableSettingsContainer.style.display === '') {
+                    tableSettingsContainer.style.display = 'block';
+                    datePickerContainer.style.display = 'none';
+                    
+                    // 현재 값 로드
+                    const savedSettings = loadTableSettings();
+                    tableWidthInput.value = savedSettings.tableWidth;
+                    containerWidthInput.value = savedSettings.containerWidth;
+                } else {
+                    tableSettingsContainer.style.display = 'none';
+                }
+            }
+            
+            // 테이블 설정 적용 함수
+            function applyTableSettings() {
+                const tableWidth = parseInt(tableWidthInput.value) || 900;
+                const containerWidth = parseInt(containerWidthInput.value) || 1200;
+                
+                // 유효성 검사
+                if (tableWidth < 500 || containerWidth < 500) {
+                    alert('너비는 최소 500px 이상이어야 합니다.');
+                    return;
+                }
+                
+                // 설정 적용
+                table.style.minWidth = tableWidth + 'px';
+                document.querySelector('.container').style.maxWidth = containerWidth + 'px';
+                
+                // 설정 저장
+                saveTableSettings(tableWidth, containerWidth);
+                
+                tableSettingsContainer.style.display = 'none';
+                alert('테이블 설정이 적용되었습니다.');
+            }
+            
+            // 테이블 설정 저장 함수
+            function saveTableSettings(tableWidth, containerWidth) {
+                const settings = {
+                    tableWidth: tableWidth,
+                    containerWidth: containerWidth
+                };
+                localStorage.setItem('tableSettings', JSON.stringify(settings));
+            }
+            
+            // 테이블 설정 불러오기 함수
+            function loadTableSettings() {
+                const savedSettings = localStorage.getItem('tableSettings');
+                if (savedSettings) {
+                    return JSON.parse(savedSettings);
+                }
+                return {
+                    tableWidth: 900,
+                    containerWidth: 1200
+                };
+            }
+            
+            // 저장된 테이블 설정 적용
+            function applyStoredTableSettings() {
+                const settings = loadTableSettings();
+                table.style.minWidth = settings.tableWidth + 'px';
+                document.querySelector('.container').style.maxWidth = settings.containerWidth + 'px';
             }
             
             // 기준일 설정 및 날짜 업데이트 함수
@@ -601,6 +723,9 @@
             
             // 페이지 로드 시 저장된 데이터 불러오기
             loadSavedData();
+            
+            // 저장된 테이블 설정 적용
+            applyStoredTableSettings();
         });
     </script>
 </body>
