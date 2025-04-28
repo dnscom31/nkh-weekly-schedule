@@ -32,7 +32,8 @@
             text-align: center;
             vertical-align: middle;
             height: 120px;
-            min-width: 120px;
+            min-height: 1px;
+            min-width: 1px;
             position: relative;
         }
         /* 내용 셀(2행 2열~5행 7열)만 왼쪽 정렬 */
@@ -41,7 +42,7 @@
             padding-left: 5px;
             white-space: pre-wrap; /* 줄바꿈 보존 */
             height: 100%;
-            min-height: 80px;
+            min-height: 1px;
             display: block; /* 블록 요소로 만들어서 전체 공간 차지 */
         }
         th {
@@ -178,20 +179,12 @@
         
         <div id="tableSettingsContainer">
             <div class="settings-row">
-                <label for="tableWidthInput">테이블 가로 크기 (px):</label>
-                <input type="number" id="tableWidthInput" min="500" step="50" value="900">
+                <label for="tableWidthInput">테이블 너비 (px):</label>
+                <input type="number" id="tableWidthInput" min="1" step="1" value="900">
             </div>
             <div class="settings-row">
-                <label for="tableHeightInput">테이블 세로 크기 (px):</label>
-                <input type="number" id="tableHeightInput" min="300" step="50" value="600">
-            </div>
-            <div class="settings-row">
-                <label for="containerWidthInput">컨테이너 가로 크기 (px):</label>
-                <input type="number" id="containerWidthInput" min="500" step="50" value="1200">
-            </div>
-            <div class="settings-row">
-                <label for="containerHeightInput">컨테이너 세로 크기 (px):</label>
-                <input type="number" id="containerHeightInput" min="300" step="50" value="800">
+                <label for="containerWidthInput">컨테이너 너비 (px):</label>
+                <input type="number" id="containerWidthInput" min="1" step="1" value="1200">
             </div>
             <button id="applySettingsButton" class="button">적용</button>
         </div>
@@ -403,9 +396,7 @@
             const tableSettingsButton = document.getElementById('tableSettingsButton');
             const tableSettingsContainer = document.getElementById('tableSettingsContainer');
             const tableWidthInput = document.getElementById('tableWidthInput');
-            const tableHeightInput = document.getElementById('tableHeightInput');
             const containerWidthInput = document.getElementById('containerWidthInput');
-            const containerHeightInput = document.getElementById('containerHeightInput');
             const applySettingsButton = document.getElementById('applySettingsButton');
             
             // 현재 날짜로 기본값 설정
@@ -508,7 +499,7 @@
                 
                 const cell = currentColResizer.parentElement;
                 const diff = e.pageX - startX;
-                const newWidth = Math.max(50, startWidth + diff);  // 최소 너비 50px
+                const newWidth = Math.max(1, startWidth + diff);  // 최소 너비 1px
                 
                 // 현재 열의 인덱스 찾기
                 const colIndex = Array.from(cell.parentElement.children).indexOf(cell);
@@ -540,7 +531,7 @@
                 const cell = currentRowResizer.parentElement;
                 const row = cell.parentElement;
                 const diff = e.pageY - startY;
-                const newHeight = Math.max(50, startHeight + diff);  // 최소 높이 50px
+                const newHeight = Math.max(1, startHeight + diff);  // 최소 높이 1px
                 
                 // 현재 행에 높이 적용
                 row.style.height = newHeight + 'px';
@@ -591,12 +582,10 @@
                     tableSettingsContainer.style.display = 'block';
                     datePickerContainer.style.display = 'none';
                     
-                    // 현재 값 로드
+                // 현재 값 로드
                     const savedSettings = loadTableSettings();
                     tableWidthInput.value = savedSettings.tableWidth;
-                    tableHeightInput.value = savedSettings.tableHeight;
                     containerWidthInput.value = savedSettings.containerWidth;
-                    containerHeightInput.value = savedSettings.containerHeight;
                 } else {
                     tableSettingsContainer.style.display = 'none';
                 }
@@ -605,36 +594,30 @@
             // 테이블 설정 적용 함수
             function applyTableSettings() {
                 const tableWidth = parseInt(tableWidthInput.value) || 900;
-                const tableHeight = parseInt(tableHeightInput.value) || 600;
                 const containerWidth = parseInt(containerWidthInput.value) || 1200;
-                const containerHeight = parseInt(containerHeightInput.value) || 800;
                 
                 // 유효성 검사
-                if (tableWidth < 500 || containerWidth < 500 || tableHeight < 300 || containerHeight < 300) {
-                    alert('가로 크기는 최소 500px, 세로 크기는 최소 300px 이상이어야 합니다.');
+                if (tableWidth < 1 || containerWidth < 1) {
+                    alert('너비는 최소 1px 이상이어야 합니다.');
                     return;
                 }
                 
                 // 설정 적용
                 table.style.minWidth = tableWidth + 'px';
-                table.style.height = tableHeight + 'px';
                 document.querySelector('.container').style.maxWidth = containerWidth + 'px';
-                document.querySelector('.container').style.height = containerHeight + 'px';
                 
                 // 설정 저장
-                saveTableSettings(tableWidth, tableHeight, containerWidth, containerHeight);
+                saveTableSettings(tableWidth, containerWidth);
                 
                 tableSettingsContainer.style.display = 'none';
                 alert('테이블 설정이 적용되었습니다.');
             }
             
             // 테이블 설정 저장 함수
-            function saveTableSettings(tableWidth, tableHeight, containerWidth, containerHeight) {
+            function saveTableSettings(tableWidth, containerWidth) {
                 const settings = {
                     tableWidth: tableWidth,
-                    tableHeight: tableHeight,
-                    containerWidth: containerWidth,
-                    containerHeight: containerHeight
+                    containerWidth: containerWidth
                 };
                 localStorage.setItem('tableSettings', JSON.stringify(settings));
             }
@@ -647,9 +630,7 @@
                 }
                 return {
                     tableWidth: 900,
-                    tableHeight: 600,
-                    containerWidth: 1200,
-                    containerHeight: 800
+                    containerWidth: 1200
                 };
             }
             
@@ -657,9 +638,7 @@
             function applyStoredTableSettings() {
                 const settings = loadTableSettings();
                 table.style.minWidth = settings.tableWidth + 'px';
-                table.style.height = settings.tableHeight + 'px';
                 document.querySelector('.container').style.maxWidth = settings.containerWidth + 'px';
-                document.querySelector('.container').style.height = settings.containerHeight + 'px';
             }
             
             // 행과 열 크기 저장 함수
