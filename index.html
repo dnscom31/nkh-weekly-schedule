@@ -40,6 +40,9 @@
         tbody td:not(.name-column) div[contenteditable="true"] {
             text-align: left;
             padding-left: 5px;
+            white-space: pre-wrap; /* 줄바꿈 보존 */
+            height: 100%;
+            overflow: auto;
         }
         th {
             background-color: #f2f2f2;
@@ -150,6 +153,19 @@
             border: 1px solid #ddd;
             border-radius: 4px;
         }
+        .row-resize-control {
+            margin-top: 10px;
+            text-align: center;
+        }
+        .row-resize-control button {
+            padding: 5px 10px;
+            margin: 0 5px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -182,43 +198,42 @@
         
         <h1>주간 업무 일정표</h1>
         
+        <div class="row-resize-control">
+            <label for="rowHeightInput">1행 높이 (px):</label>
+            <input type="number" id="rowHeightInput" min="50" max="500" step="10" value="120">
+            <button id="applyRowHeightButton">적용</button>
+        </div>
+        
         <table id="scheduleTable">
             <thead>
                 <tr>
                     <th>
                         <div contenteditable="true">구분</div>
                         <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
                     </th>
                     <th>
                         <div contenteditable="true">4/7 (월)</div>
                         <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
                     </th>
                     <th>
                         <div contenteditable="true">4/8 (화)</div>
                         <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
                     </th>
                     <th>
                         <div contenteditable="true">4/9 (수)</div>
                         <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
                     </th>
                     <th>
                         <div contenteditable="true">4/10 (목)</div>
                         <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
                     </th>
                     <th>
                         <div contenteditable="true">4/11 (금)</div>
                         <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
                     </th>
                     <th>
                         <div contenteditable="true">4/12 (토)</div>
                         <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
                     </th>
                 </tr>
             </thead>
@@ -227,148 +242,120 @@
                     <td class="name-column">
                         <div contenteditable="true">이대성</div>
                         <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
                     </td>
                     <td>
                         <div contenteditable="true"></div>
                         <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
                     </td>
                     <td>
                         <div contenteditable="true"></div>
                         <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
                     </td>
                     <td>
                         <div contenteditable="true"></div>
                         <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
                     </td>
                     <td>
                         <div contenteditable="true"></div>
                         <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
                     </td>
                     <td>
                         <div contenteditable="true"></div>
                         <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
                     </td>
                     <td>
                         <div contenteditable="true"></div>
                         <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
                     </td>
                 </tr>
                 <tr>
                     <td class="name-column">
                         <div contenteditable="true">강경복</div>
                         <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
                     </td>
                     <td>
                         <div contenteditable="true"></div>
                         <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
                     </td>
                     <td>
                         <div contenteditable="true"></div>
                         <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
                     </td>
                     <td>
                         <div contenteditable="true"></div>
                         <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
                     </td>
                     <td>
                         <div contenteditable="true"></div>
                         <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
                     </td>
                     <td>
                         <div contenteditable="true"></div>
                         <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
                     </td>
                     <td>
                         <div contenteditable="true"></div>
                         <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
                     </td>
                 </tr>
                 <tr>
                     <td class="name-column">
                         <div contenteditable="true">윤명한</div>
                         <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
                     </td>
                     <td>
                         <div contenteditable="true"></div>
                         <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
                     </td>
                     <td>
                         <div contenteditable="true"></div>
                         <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
                     </td>
                     <td>
                         <div contenteditable="true"></div>
                         <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
                     </td>
                     <td>
                         <div contenteditable="true"></div>
                         <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
                     </td>
                     <td>
                         <div contenteditable="true"></div>
                         <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
                     </td>
                     <td>
                         <div contenteditable="true"></div>
                         <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
                     </td>
                 </tr>
                 <tr>
                     <td class="name-column">
                         <div contenteditable="true">이준환</div>
                         <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
                     </td>
                     <td>
                         <div contenteditable="true"></div>
                         <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
                     </td>
                     <td>
                         <div contenteditable="true"></div>
                         <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
                     </td>
                     <td>
                         <div contenteditable="true"></div>
                         <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
                     </td>
                     <td>
                         <div contenteditable="true"></div>
                         <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
                     </td>
                     <td>
                         <div contenteditable="true"></div>
                         <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
                     </td>
                     <td>
                         <div contenteditable="true"></div>
                         <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
                     </td>
                 </tr>
             </tbody>
@@ -389,6 +376,8 @@
             const tableWidthInput = document.getElementById('tableWidthInput');
             const containerWidthInput = document.getElementById('containerWidthInput');
             const applySettingsButton = document.getElementById('applySettingsButton');
+            const rowHeightInput = document.getElementById('rowHeightInput');
+            const applyRowHeightButton = document.getElementById('applyRowHeightButton');
             
             // 현재 날짜로 기본값 설정
             const today = new Date();
@@ -400,10 +389,27 @@
             let currentColResizer = null;
             let startX, startWidth;
             
-            // 행 크기 조절 기능
-            let isRowResizing = false;
-            let currentRowResizer = null;
-            let startY, startHeight;
+            // 1행 높이 변경 기능
+            applyRowHeightButton.addEventListener('click', function() {
+                const height = parseInt(rowHeightInput.value) || 120;
+                if (height < 50 || height > 500) {
+                    alert('행 높이는 50~500px 사이여야 합니다.');
+                    return;
+                }
+                
+                // 모든 행에 동일한 높이 적용
+                const rows = table.querySelectorAll('tr');
+                rows.forEach(row => {
+                    row.style.height = height + 'px';
+                });
+                
+                // 설정 저장
+                const settings = loadTableSettings();
+                settings.rowHeight = height;
+                saveTableSettings(settings.tableWidth, settings.containerWidth, height);
+                
+                alert('행 높이가 변경되었습니다.');
+            });
 
             // 열 크기 조절 이벤트 리스너
             document.querySelectorAll('.resize-handle-col').forEach(handle => {
@@ -417,24 +423,6 @@
                     
                     document.addEventListener('mousemove', handleColResize);
                     document.addEventListener('mouseup', stopColResize);
-                    e.preventDefault();
-                });
-            });
-
-            // 행 크기 조절 이벤트 리스너
-            document.querySelectorAll('.resize-handle-row').forEach(handle => {
-                handle.addEventListener('mousedown', function(e) {
-                    isRowResizing = true;
-                    currentRowResizer = this;
-                    startY = e.pageY;
-                    
-                    // 수정된 부분: td -> tr 요소 찾기
-                    const cell = this.parentElement;
-                    const row = cell.parentElement;
-                    startHeight = row.offsetHeight;
-                    
-                    document.addEventListener('mousemove', handleRowResize);
-                    document.addEventListener('mouseup', stopRowResize);
                     e.preventDefault();
                 });
             });
@@ -504,24 +492,6 @@
                 document.removeEventListener('mousemove', handleColResize);
                 document.removeEventListener('mouseup', stopColResize);
             }
-
-            function handleRowResize(e) {
-                if (!isRowResizing) return;
-                
-                // 수정된 부분: row 변수 찾기
-                const cell = currentRowResizer.parentElement;
-                const row = cell.parentElement;
-                const diff = e.pageY - startY;
-                
-                const newHeight = Math.max(30, startHeight + diff);  // 최소 높이 30px
-                row.style.height = newHeight + 'px';
-            }
-
-            function stopRowResize() {
-                isRowResizing = false;
-                document.removeEventListener('mousemove', handleRowResize);
-                document.removeEventListener('mouseup', stopRowResize);
-            }
             
             // 일정 초기화 함수 - 구분 행과 열을 제외한 내용 초기화
             function resetSchedule() {
@@ -583,17 +553,19 @@
                 document.querySelector('.container').style.maxWidth = containerWidth + 'px';
                 
                 // 설정 저장
-                saveTableSettings(tableWidth, containerWidth);
+                const settings = loadTableSettings();
+                saveTableSettings(tableWidth, containerWidth, settings.rowHeight || 120);
                 
                 tableSettingsContainer.style.display = 'none';
                 alert('테이블 설정이 적용되었습니다.');
             }
             
             // 테이블 설정 저장 함수
-            function saveTableSettings(tableWidth, containerWidth) {
+            function saveTableSettings(tableWidth, containerWidth, rowHeight) {
                 const settings = {
                     tableWidth: tableWidth,
-                    containerWidth: containerWidth
+                    containerWidth: containerWidth,
+                    rowHeight: rowHeight || 120
                 };
                 localStorage.setItem('tableSettings', JSON.stringify(settings));
             }
@@ -606,7 +578,8 @@
                 }
                 return {
                     tableWidth: 900,
-                    containerWidth: 1200
+                    containerWidth: 1200,
+                    rowHeight: 120
                 };
             }
             
@@ -615,6 +588,15 @@
                 const settings = loadTableSettings();
                 table.style.minWidth = settings.tableWidth + 'px';
                 document.querySelector('.container').style.maxWidth = settings.containerWidth + 'px';
+                
+                // 행 높이 적용
+                if (settings.rowHeight) {
+                    rowHeightInput.value = settings.rowHeight;
+                    const rows = table.querySelectorAll('tr');
+                    rows.forEach(row => {
+                        row.style.height = settings.rowHeight + 'px';
+                    });
+                }
             }
             
             // 기준일 설정 및 날짜 업데이트 함수
@@ -661,7 +643,7 @@
                 const headerRow = table.querySelector('thead tr');
                 Array.from(headerRow.children).forEach(th => {
                     const contentDiv = th.querySelector('div[contenteditable="true"]');
-                    scheduleData.headers.push(contentDiv ? contentDiv.textContent : '');
+                    scheduleData.headers.push(contentDiv ? contentDiv.innerHTML : '');
                 });
                 
                 // 이름과 일정 내용 저장
@@ -671,13 +653,13 @@
                     
                     // 이름 저장
                     const nameCell = row.querySelector('.name-column div[contenteditable="true"]');
-                    scheduleData.names.push(nameCell ? nameCell.textContent : '');
+                    scheduleData.names.push(nameCell ? nameCell.innerHTML : '');
                     
-                    // 셀 내용 저장
+                    // 셀 내용 저장 - innerHTML 사용하여 줄바꿈 보존
                     const cells = row.querySelectorAll('td:not(.name-column)');
                     cells.forEach(cell => {
                         const contentDiv = cell.querySelector('div[contenteditable="true"]');
-                        rowData.push(contentDiv ? contentDiv.textContent : '');
+                        rowData.push(contentDiv ? contentDiv.innerHTML : '');
                     });
                     
                     scheduleData.content.push(rowData);
@@ -701,7 +683,7 @@
                         if (scheduleData.headers[index]) {
                             const contentDiv = th.querySelector('div[contenteditable="true"]');
                             if (contentDiv) {
-                                contentDiv.textContent = scheduleData.headers[index];
+                                contentDiv.innerHTML = scheduleData.headers[index];
                             }
                         }
                     });
@@ -712,15 +694,15 @@
                         // 이름 복원
                         const nameCell = row.querySelector('.name-column div[contenteditable="true"]');
                         if (nameCell && scheduleData.names[rowIndex]) {
-                            nameCell.textContent = scheduleData.names[rowIndex];
+                            nameCell.innerHTML = scheduleData.names[rowIndex];
                         }
                         
-                        // 셀 내용 복원
+                        // 셀 내용 복원 - innerHTML 사용하여 줄바꿈 포함 복원
                         const cells = row.querySelectorAll('td:not(.name-column)');
                         cells.forEach((cell, cellIndex) => {
                             const contentDiv = cell.querySelector('div[contenteditable="true"]');
                             if (contentDiv && scheduleData.content[rowIndex] && scheduleData.content[rowIndex][cellIndex]) {
-                                contentDiv.textContent = scheduleData.content[rowIndex][cellIndex];
+                                contentDiv.innerHTML = scheduleData.content[rowIndex][cellIndex];
                             }
                         });
                     });
