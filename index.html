@@ -121,38 +121,6 @@
             padding: 8px;
             font-family: 'Malgun Gothic', sans-serif;
         }
-        #configureDbForm {
-            display: none;
-            max-width: 600px;
-            margin: 20px auto;
-            padding: 20px;
-            background-color: #f9f9f9;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-        }
-        .form-group {
-            margin-bottom: 15px;
-        }
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-        }
-        .form-group input {
-            width: 100%;
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            box-sizing: border-box;
-        }
-        .cloud-buttons {
-            margin-top: 20px;
-        }
-        .info-text {
-            font-size: 13px;
-            color: #666;
-            margin-top: 5px;
-        }
     </style>
 </head>
 <body>
@@ -432,7 +400,7 @@
                 toggleDatePicker();
             });
             
-            // 날짜 확인 버튼 이벤트 리스너 - 이 부분이 추가되었습니다
+            // 날짜 확인 버튼 이벤트 리스너
             if (confirmDateButton) {
                 confirmDateButton.addEventListener('click', function() {
                     setBaseDateAndUpdate();
@@ -445,51 +413,7 @@
                 saveButton.addEventListener('click', function() {
                     saveScheduleData();
                     alert('일정이 저장되었습니다.');
-                    displaySavedData(); // 저장 후 화면에 보여주기
                 });
-            }
-            
-            // 저장된 일정 데이터를 화면에 보여주는 함수
-            function displaySavedData() {
-                const savedData = localStorage.getItem('weeklyScheduleData');
-                if (!savedData) return;
-                
-                try {
-                    const scheduleData = JSON.parse(savedData);
-                    
-                    // 헤더(날짜) 표시
-                    const headerRow = table.querySelector('thead tr');
-                    Array.from(headerRow.children).forEach((th, index) => {
-                        if (scheduleData.headers[index]) {
-                            const contentDiv = th.querySelector('div[contenteditable="true"]');
-                            if (contentDiv) {
-                                contentDiv.textContent = scheduleData.headers[index];
-                            }
-                        }
-                    });
-                    
-                    // 이름과 일정 내용 표시
-                    const rows = table.querySelectorAll('tbody tr');
-                    rows.forEach((row, rowIndex) => {
-                        // 이름 표시
-                        const nameCell = row.querySelector('.name-column div[contenteditable="true"]');
-                        if (nameCell && scheduleData.names[rowIndex]) {
-                            nameCell.textContent = scheduleData.names[rowIndex];
-                        }
-                        
-                        // 셀 내용 표시
-                        const cells = row.querySelectorAll('td:not(.name-column)');
-                        cells.forEach((cell, cellIndex) => {
-                            const contentDiv = cell.querySelector('div[contenteditable="true"]');
-                            if (contentDiv && scheduleData.content[rowIndex] && scheduleData.content[rowIndex][cellIndex]) {
-                                contentDiv.textContent = scheduleData.content[rowIndex][cellIndex];
-                            }
-                        });
-                    });
-                    
-                } catch (error) {
-                    console.error('데이터 표시 오류:', error);
-                }
             }
 
             function handleColResize(e) {
@@ -550,7 +474,134 @@
                 
                 // 초기화 후 저장
                 saveScheduleData();
+                alert('일정이 초기화되었습니다.');
             }
             
             // 날짜 선택기 토글 함수
-            function toggleDatePicker()
+            function toggleDatePicker() {
+                if (datePickerContainer.style.display === 'none' || datePickerContainer.style.display === '') {
+                    datePickerContainer.style.display = 'block';
+                } else {
+                    datePickerContainer.style.display = 'none';
+                }
+            }
+            
+            // 기준일 설정 및 날짜 업데이트 함수
+            function setBaseDateAndUpdate() {
+                const baseDate = new Date(datePicker.value);
+                if (isNaN(baseDate.getTime())) {
+                    alert('유효한 날짜를 선택해주세요.');
+                    return;
+                }
+                
+                const headerRow = table.querySelector('thead tr');
+                const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+                
+                // 첫 번째 열은 '구분'이므로 건너뜀
+                for (let i = 1; i < headerRow.children.length; i++) {
+                    const currentDate = new Date(baseDate);
+                    currentDate.setDate(baseDate.getDate() + (i - 1));
+                    
+                    const month = currentDate.getMonth() + 1;
+                    const day = currentDate.getDate();
+                    const dayName = dayNames[currentDate.getDay()];
+                    
+                    const headerCell = headerRow.children[i];
+                    const contentDiv = headerCell.querySelector('div[contenteditable="true"]');
+                    if (contentDiv) {
+                        contentDiv.textContent = `${month}/${day} (${dayName})`;
+                    }
+                }
+                
+                // 날짜 업데이트 후 저장
+                saveScheduleData();
+                alert('기준일이 설정되었습니다.');
+            }
+            
+            // 데이터 저장 함수
+            function saveScheduleData() {
+                const scheduleData = {
+                    headers: [],
+                    names: [],
+                    content: []
+                };
+                
+                // 헤더(날짜) 저장
+                const headerRow = table.querySelector('thead tr');
+                Array.from(headerRow.children).forEach(th => {
+                    const contentDiv = th.querySelector('div[contenteditable="true"]');
+                    scheduleData.headers.push(contentDiv ? contentDiv.textContent : '');
+                });
+                
+                // 이름과 일정 내용 저장
+                const rows = table.querySelectorAll('tbody tr');
+                rows.forEach(row => {
+                    const rowData = [];
+                    
+                    // 이름 저장
+                    const nameCell = row.querySelector('.name-column div[contenteditable="true"]');
+                    scheduleData.names.push(nameCell ? nameCell.textContent : '');
+                    
+                    // 셀 내용 저장
+                    const cells = row.querySelectorAll('td:not(.name-column)');
+                    cells.forEach(cell => {
+                        const contentDiv = cell.querySelector('div[contenteditable="true"]');
+                        rowData.push(contentDiv ? contentDiv.textContent : '');
+                    });
+                    
+                    scheduleData.content.push(rowData);
+                });
+                
+                // 로컬 스토리지에 저장
+                localStorage.setItem('weeklyScheduleData', JSON.stringify(scheduleData));
+            }
+            
+            // 저장된 데이터 불러오기 함수
+            function loadSavedData() {
+                const savedData = localStorage.getItem('weeklyScheduleData');
+                if (!savedData) return;
+                
+                try {
+                    const scheduleData = JSON.parse(savedData);
+                    
+                    // 헤더(날짜) 복원
+                    const headerRow = table.querySelector('thead tr');
+                    Array.from(headerRow.children).forEach((th, index) => {
+                        if (scheduleData.headers[index]) {
+                            const contentDiv = th.querySelector('div[contenteditable="true"]');
+                            if (contentDiv) {
+                                contentDiv.textContent = scheduleData.headers[index];
+                            }
+                        }
+                    });
+                    
+                    // 이름과 일정 내용 복원
+                    const rows = table.querySelectorAll('tbody tr');
+                    rows.forEach((row, rowIndex) => {
+                        // 이름 복원
+                        const nameCell = row.querySelector('.name-column div[contenteditable="true"]');
+                        if (nameCell && scheduleData.names[rowIndex]) {
+                            nameCell.textContent = scheduleData.names[rowIndex];
+                        }
+                        
+                        // 셀 내용 복원
+                        const cells = row.querySelectorAll('td:not(.name-column)');
+                        cells.forEach((cell, cellIndex) => {
+                            const contentDiv = cell.querySelector('div[contenteditable="true"]');
+                            if (contentDiv && scheduleData.content[rowIndex] && scheduleData.content[rowIndex][cellIndex]) {
+                                contentDiv.textContent = scheduleData.content[rowIndex][cellIndex];
+                            }
+                        });
+                    });
+                    
+                } catch (error) {
+                    console.error('데이터 로드 오류:', error);
+                }
+            }
+            
+            // 페이지 로드 시 저장된 데이터 불러오기
+            loadSavedData();
+        });
+    </script>
+</body>
+</html>
