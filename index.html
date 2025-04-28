@@ -43,6 +43,7 @@
             white-space: pre-wrap; /* 줄바꿈 보존 */
             height: 100%;
             overflow: auto;
+            min-height: 80px;
         }
         th {
             background-color: #f2f2f2;
@@ -100,6 +101,7 @@
             width: 100%;
             cursor: row-resize;
             z-index: 1;
+            background-color: rgba(0, 0, 0, 0.05);
         }
         .instructions {
             text-align: center;
@@ -153,19 +155,6 @@
             border: 1px solid #ddd;
             border-radius: 4px;
         }
-        .row-resize-control {
-            margin-top: 10px;
-            text-align: center;
-        }
-        .row-resize-control button {
-            padding: 5px 10px;
-            margin: 0 5px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
     </style>
 </head>
 <body>
@@ -197,12 +186,6 @@
         </div>
         
         <h1>주간 업무 일정표</h1>
-        
-        <div class="row-resize-control">
-            <label for="rowHeightInput">1행 높이 (px):</label>
-            <input type="number" id="rowHeightInput" min="50" max="500" step="10" value="120">
-            <button id="applyRowHeightButton">적용</button>
-        </div>
         
         <table id="scheduleTable">
             <thead>
@@ -242,6 +225,7 @@
                     <td class="name-column">
                         <div contenteditable="true">이대성</div>
                         <div class="resize-handle-col"></div>
+                        <div class="resize-handle-row"></div>
                     </td>
                     <td>
                         <div contenteditable="true"></div>
@@ -272,6 +256,7 @@
                     <td class="name-column">
                         <div contenteditable="true">강경복</div>
                         <div class="resize-handle-col"></div>
+                        <div class="resize-handle-row"></div>
                     </td>
                     <td>
                         <div contenteditable="true"></div>
@@ -302,6 +287,7 @@
                     <td class="name-column">
                         <div contenteditable="true">윤명한</div>
                         <div class="resize-handle-col"></div>
+                        <div class="resize-handle-row"></div>
                     </td>
                     <td>
                         <div contenteditable="true"></div>
@@ -332,6 +318,7 @@
                     <td class="name-column">
                         <div contenteditable="true">이준환</div>
                         <div class="resize-handle-col"></div>
+                        <div class="resize-handle-row"></div>
                     </td>
                     <td>
                         <div contenteditable="true"></div>
@@ -376,8 +363,6 @@
             const tableWidthInput = document.getElementById('tableWidthInput');
             const containerWidthInput = document.getElementById('containerWidthInput');
             const applySettingsButton = document.getElementById('applySettingsButton');
-            const rowHeightInput = document.getElementById('rowHeightInput');
-            const applyRowHeightButton = document.getElementById('applyRowHeightButton');
             
             // 현재 날짜로 기본값 설정
             const today = new Date();
@@ -389,27 +374,10 @@
             let currentColResizer = null;
             let startX, startWidth;
             
-            // 1행 높이 변경 기능
-            applyRowHeightButton.addEventListener('click', function() {
-                const height = parseInt(rowHeightInput.value) || 120;
-                if (height < 50 || height > 500) {
-                    alert('행 높이는 50~500px 사이여야 합니다.');
-                    return;
-                }
-                
-                // 모든 행에 동일한 높이 적용
-                const rows = table.querySelectorAll('tr');
-                rows.forEach(row => {
-                    row.style.height = height + 'px';
-                });
-                
-                // 설정 저장
-                const settings = loadTableSettings();
-                settings.rowHeight = height;
-                saveTableSettings(settings.tableWidth, settings.containerWidth, height);
-                
-                alert('행 높이가 변경되었습니다.');
-            });
+            // 행 크기 조절 기능
+            let isRowResizing = false;
+            let currentRowResizer = null;
+            let startY, startHeight;
 
             // 열 크기 조절 이벤트 리스너
             document.querySelectorAll('.resize-handle-col').forEach(handle => {
@@ -424,6 +392,36 @@
                     document.addEventListener('mousemove', handleColResize);
                     document.addEventListener('mouseup', stopColResize);
                     e.preventDefault();
+                });
+            });
+
+            // 행 크기 조절 이벤트 리스너
+            document.querySelectorAll('.resize-handle-row').forEach(handle => {
+                handle.addEventListener('mousedown', function(e) {
+                    isRowResizing = true;
+                    currentRowResizer = this;
+                    startY = e.pageY;
+                    
+                    // 직접 행(tr) 찾기
+                    const row = this.closest('tr');
+                    startHeight = row.offsetHeight;
+                    
+                    document.addEventListener('mousemove', handleRowResize);
+                    document.addEventListener('mouseup', stopRowResize);
+                    e.preventDefault();
+                });
+            });
+            
+            // contentEditable에서 Enter 키 처리
+            document.querySelectorAll('div[contenteditable="true"]').forEach(div => {
+                div.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') {
+                        // 기본 Enter 동작 방지
+                        e.preventDefault();
+                        
+                        // <br> 태그 삽입
+                        document.execCommand('insertHTML', false, '<br><br>');
+                    }
                 });
             });
 
@@ -492,6 +490,65 @@
                 document.removeEventListener('mousemove', handleColResize);
                 document.removeEventListener('mouseup', stopColResize);
             }
+
+            function handleRowResize(e) {
+                if (!isRowResizing) return;
+                
+                // 직접 행(tr) 찾기
+                const row = currentRowResizer.closest('tr');
+                const diff = e.pageY - startY;
+                
+                const newHeight = Math.max(30, startHeight + diff);  // 최소 높이 30px
+                row.style.height = newHeight + 'px';
+                
+                // 현재 높이 저장
+                row.dataset.customHeight = newHeight;
+            }
+
+            function stopRowResize() {
+                isRowResizing = false;
+                document.removeEventListener('mousemove', handleRowResize);
+                document.removeEventListener('mouseup', stopRowResize);
+                
+                // 행 높이 변경 후 저장
+                saveRowHeights();
+            }
+            
+            // 행 높이 저장 함수
+            function saveRowHeights() {
+                const rowHeights = [];
+                
+                // 모든 행의 높이 저장
+                const rows = table.querySelectorAll('tbody tr');
+                rows.forEach(row => {
+                    // dataset에 저장된 커스텀 높이 또는 현재 높이 사용
+                    const height = row.dataset.customHeight || row.offsetHeight;
+                    rowHeights.push(height);
+                });
+                
+                // 로컬 스토리지에 저장
+                localStorage.setItem('rowHeights', JSON.stringify(rowHeights));
+            }
+            
+            // 저장된 행 높이 적용 함수
+            function applyRowHeights() {
+                const savedHeights = localStorage.getItem('rowHeights');
+                if (!savedHeights) return;
+                
+                try {
+                    const rowHeights = JSON.parse(savedHeights);
+                    const rows = table.querySelectorAll('tbody tr');
+                    
+                    rows.forEach((row, index) => {
+                        if (rowHeights[index]) {
+                            row.style.height = rowHeights[index] + 'px';
+                            row.dataset.customHeight = rowHeights[index];
+                        }
+                    });
+                } catch (error) {
+                    console.error('행 높이 로드 오류:', error);
+                }
+            }
             
             // 일정 초기화 함수 - 구분 행과 열을 제외한 내용 초기화
             function resetSchedule() {
@@ -553,19 +610,17 @@
                 document.querySelector('.container').style.maxWidth = containerWidth + 'px';
                 
                 // 설정 저장
-                const settings = loadTableSettings();
-                saveTableSettings(tableWidth, containerWidth, settings.rowHeight || 120);
+                saveTableSettings(tableWidth, containerWidth);
                 
                 tableSettingsContainer.style.display = 'none';
                 alert('테이블 설정이 적용되었습니다.');
             }
             
             // 테이블 설정 저장 함수
-            function saveTableSettings(tableWidth, containerWidth, rowHeight) {
+            function saveTableSettings(tableWidth, containerWidth) {
                 const settings = {
                     tableWidth: tableWidth,
-                    containerWidth: containerWidth,
-                    rowHeight: rowHeight || 120
+                    containerWidth: containerWidth
                 };
                 localStorage.setItem('tableSettings', JSON.stringify(settings));
             }
@@ -578,8 +633,7 @@
                 }
                 return {
                     tableWidth: 900,
-                    containerWidth: 1200,
-                    rowHeight: 120
+                    containerWidth: 1200
                 };
             }
             
@@ -588,15 +642,6 @@
                 const settings = loadTableSettings();
                 table.style.minWidth = settings.tableWidth + 'px';
                 document.querySelector('.container').style.maxWidth = settings.containerWidth + 'px';
-                
-                // 행 높이 적용
-                if (settings.rowHeight) {
-                    rowHeightInput.value = settings.rowHeight;
-                    const rows = table.querySelectorAll('tr');
-                    rows.forEach(row => {
-                        row.style.height = settings.rowHeight + 'px';
-                    });
-                }
             }
             
             // 기준일 설정 및 날짜 업데이트 함수
@@ -667,6 +712,9 @@
                 
                 // 로컬 스토리지에 저장
                 localStorage.setItem('weeklyScheduleData', JSON.stringify(scheduleData));
+                
+                // 행 높이도 함께 저장
+                saveRowHeights();
             }
             
             // 저장된 데이터 불러오기 함수
@@ -710,6 +758,9 @@
                 } catch (error) {
                     console.error('데이터 로드 오류:', error);
                 }
+                
+                // 행 높이 복원
+                applyRowHeights();
             }
             
             // 페이지 로드 시 저장된 데이터 불러오기
