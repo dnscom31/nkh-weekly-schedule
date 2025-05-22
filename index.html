@@ -3,10 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>주간 업무 일정표 – Firestore 버전</title>
+  <title>주간 업무 일정표 – Supabase 버전</title>
+
+  <!-- === 기존 스타일 그대로 === -->
   <style>
-    /* === 원본 스타일 그대로 유지 === */
-    body {font-family:'Malgun Gothic',sans-serif;margin:20px;padding:0;}
+    body{font-family:'Malgun Gothic',sans-serif;margin:20px;padding:0;}
     .container{max-width:1200px;margin:0 auto;overflow-x:auto;}
     h1{text-align:center;margin-bottom:20px;}
     table{width:100%;min-width:900px;table-layout:fixed;border-collapse:collapse;margin-bottom:30px;}
@@ -28,28 +29,23 @@
     .settings-row label{margin-right:10px;font-weight:bold;width:180px;text-align:right;}
     .settings-row input{width:100px;padding:8px;border:1px solid #ddd;border-radius:4px;}
   </style>
-  <!-- SheetJS (엑셀 내보내기용) -->
+
+  <!-- SheetJS (CSV/Excel 내보내기용) -->
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <!-- Firebase SDK (모듈 버전) -->
+
+  <!-- Supabase SDK (ESM) -->
   <script type="module">
-    /* ===== Firebase 초기화 ===== */
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    /* ===== Supabase 초기화 ===== */
+    import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
-    // *** 여기에 본인 프로젝트 설정 붙여넣기 ***
-    const firebaseConfig = {
-      apiKey: "YOUR_API_KEY",
-      authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-      projectId: "YOUR_PROJECT_ID",
-      storageBucket: "YOUR_PROJECT_ID.appspot.com",
-      messagingSenderId: "SENDER_ID",
-      appId: "APP_ID"
-    };
-    const app = initializeApp(firebaseConfig);
-    const db  = getFirestore(app);
-    const docRef = doc(db, "schedules", "weekly"); // schedules 컬렉션, weekly 문서
+    const SUPABASE_URL = "https://ramohonocjbpiijtrppp.supabase.co";
+    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJhbW9ob25vY2picGlpanRycHBwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc4NzExNDUsImV4cCI6MjA2MzQ0NzE0NX0.0RcsA35pzPXHFvYooFbS2PXHwKbpgEHLM1jFFsfZsoE";
 
-    /* ===== DOMContentLoaded 이후 로직 ===== */
+    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+    const TABLE_NAME = "schedules";
+    const DOC_ID = "weekly";
+
+    /* ===== DOMContentLoaded 이후 ===== */
     document.addEventListener('DOMContentLoaded', () => {
       /* ---- 요소 참조 ---- */
       const table                 = document.getElementById('scheduleTable');
@@ -73,14 +69,9 @@
       let isColResizing=false,startX,startWidth,currentColResizer;
       let isRowResizing=false,startY,startHeight,currentRowResizer;
 
-      /* ---- Firestore 저장 디바운스 ---- */
-      let saveTimer=null;
-      function debounceSave(data){
-        clearTimeout(saveTimer);
-        saveTimer=setTimeout(()=>setDoc(docRef,data),300);
-      }
-
-      /* ---- 공통 데이터 수집 ---- */
+      /* ------------------------------------------------------------------
+         공통 데이터 수집 / 테이블 로드 함수
+      ------------------------------------------------------------------ */
       function gatherScheduleData(){
         const headerRow = table.querySelector('thead tr');
         const headers   = Array.from(headerRow.children).map(th=>th.querySelector('div[contenteditable="true"]').innerHTML);
@@ -93,25 +84,21 @@
           });
           content.push(rowData);
         });
-        // 열/행 크기
         const dim={columns:[],rows:[]};
         const firstRow=table.querySelector('tr');
         Array.from(firstRow.children).forEach(c=>dim.columns.push(c.offsetWidth));
         table.querySelectorAll('tr').forEach(r=>dim.rows.push(r.offsetHeight));
-        // 테이블 설정
         const settings={tableWidth:parseInt(table.style.minWidth)||900,containerWidth:parseInt(document.querySelector('.container').style.maxWidth)||1200};
         return {headers,names,content,dim,settings,updated:Date.now()};
       }
-      /* ---- Firestore → 화면 로드 ---- */
+
       function loadScheduleIntoTable(data){
         if(!data) return;
-        // 헤더
         const headerRow=table.querySelector('thead tr');
         Array.from(headerRow.children).forEach((th,i)=>{
           const div=th.querySelector('div[contenteditable="true"]');
           if(div&&data.headers[i]!==undefined) div.innerHTML=data.headers[i];
         });
-        // 바디
         table.querySelectorAll('tbody tr').forEach((row,ri)=>{
           const nameCell=row.querySelector('.name-column div[contenteditable="true"]');
           if(nameCell&&data.names[ri]!==undefined) nameCell.innerHTML=data.names[ri];
@@ -120,7 +107,6 @@
             if(div&&data.content[ri]&&data.content[ri][ci]!==undefined) div.innerHTML=data.content[ri][ci];
           });
         });
-        // 크기
         if(data.dim){
           table.querySelectorAll('tr').forEach((row,ri)=>{
             if(data.dim.rows[ri]) row.style.height=data.dim.rows[ri]+'px';
@@ -129,30 +115,65 @@
             });
           });
         }
-        // 설정
         if(data.settings){
           table.style.minWidth=data.settings.tableWidth+'px';
           document.querySelector('.container').style.maxWidth=data.settings.containerWidth+'px';
         }
       }
 
-      /* ---- Firestore 실시간 구독 ---- */
-      onSnapshot(docRef,(snap)=>{
-        if(snap.exists()) loadScheduleIntoTable(snap.data());
-      });
+      /* ------------------------------------------------------------------
+         Supabase : 초기 로드
+      ------------------------------------------------------------------ */
+      async function fetchInitial(){
+        const { data, error } = await supabase
+          .from(TABLE_NAME)
+          .select('payload')
+          .eq('id', DOC_ID)
+          .single();
+
+        if(data && data.payload) loadScheduleIntoTable(data.payload);
+      }
+      fetchInitial();
+
+      /* ------------------------------------------------------------------
+         Supabase : 실시간 구독
+      ------------------------------------------------------------------ */
+      supabase.channel('schedule_realtime')
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: TABLE_NAME, filter: `id=eq.${DOC_ID}` },
+          payload => loadScheduleIntoTable(payload.new.payload)
+        )
+        .subscribe();
+
+      /* ------------------------------------------------------------------
+         Supabase : 저장 (디바운스)
+      ------------------------------------------------------------------ */
+      let saveTimer=null;
+      function debounceSave(json){
+        clearTimeout(saveTimer);
+        saveTimer=setTimeout(()=>{
+          supabase
+            .from(TABLE_NAME)
+            .update({ payload: json })
+            .eq('id', DOC_ID);
+        },300);
+      }
 
       /* ---- 셀 편집 이벤트 → 저장 ---- */
       table.addEventListener('input',()=>debounceSave(gatherScheduleData()));
 
-      /* ---- 버튼 핸들러 ---- */
+      /* ---- UI 버튼 핸들러 ---- */
       resetButton.addEventListener('click',()=>{
         table.querySelectorAll('tbody tr td:not(.name-column) div[contenteditable="true"]').forEach(div=>div.innerHTML='');
         debounceSave(gatherScheduleData());
       });
+
       dateSettingButton.addEventListener('click',()=>{
         datePickerContainer.style.display=(datePickerContainer.style.display==='block')?'none':'block';
         tableSettingsContainer.style.display='none';
       });
+
       confirmDateButton.addEventListener('click',()=>{
         const baseDate=new Date(datePicker.value);
         const days=['일','월','화','수','목','금','토'];
@@ -165,13 +186,16 @@
         datePickerContainer.style.display='none';
         debounceSave(gatherScheduleData());
       });
+
       saveButton.addEventListener('click',()=>debounceSave(gatherScheduleData()));
+
       tableSettingsButton.addEventListener('click',()=>{
         tableSettingsContainer.style.display=(tableSettingsContainer.style.display==='block')?'none':'block';
         datePickerContainer.style.display='none';
         tableWidthInput.value=parseInt(table.style.minWidth)||900;
         containerWidthInput.value=parseInt(document.querySelector('.container').style.maxWidth)||1200;
       });
+
       applySettingsButton.addEventListener('click',()=>{
         const tw=parseInt(tableWidthInput.value)||900;
         const cw=parseInt(containerWidthInput.value)||1200;
@@ -180,7 +204,8 @@
         tableSettingsContainer.style.display='none';
         debounceSave(gatherScheduleData());
       });
-      // CSV/Excel 내보내기
+
+      /* ---- CSV 내보내기 ---- */
       exportButton.addEventListener('click',()=>{
         const d=gatherScheduleData();
         const rows=[d.headers,...d.names.map((n,i)=>[n,...d.content[i]])];
@@ -189,8 +214,7 @@
         const url=URL.createObjectURL(blob);
         const a=document.createElement('a');
         a.href=url;a.download='weekly_schedule.csv';a.click();URL.revokeObjectURL(url);
-        // Excel - 코멘트 해제 시 사용
-        /*
+        /* 엑셀 지원 시
         const ws=XLSX.utils.aoa_to_sheet(rows);
         const wb=XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb,ws,'Schedule');
@@ -198,38 +222,67 @@
         */
       });
 
-      /* ---- 셀 Enter 줄바꿈 처리 ---- */
+      /* ---- Enter → 줄바꿈 ---- */
       table.querySelectorAll('div[contenteditable="true"]').forEach(div=>{
-        div.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();document.execCommand('insertHTML',false,'<br>');}});
+        div.addEventListener('keydown',e=>{
+          if(e.key==='Enter'){
+            e.preventDefault();
+            document.execCommand('insertHTML',false,'<br>');
+          }
+        });
       });
 
-      /* ---- 열/행 리사이즈 ---- */
-      // col
+      /* ---- 열/행 리사이즈 핸들 ---- */
       document.querySelectorAll('.resize-handle-col').forEach(h=>h.addEventListener('mousedown',e=>{
         isColResizing=true;currentColResizer=h;startX=e.pageX;startWidth=h.parentElement.offsetWidth;
         document.addEventListener('mousemove',colResize);document.addEventListener('mouseup',stopCol);
       }));
-      function colResize(e){if(!isColResizing)return;const diff=e.pageX-startX;const newW=Math.max(1,startWidth+diff);
+      function colResize(e){
+        if(!isColResizing)return;
+        const diff=e.pageX-startX;
+        const newW=Math.max(1,startWidth+diff);
         const idx=[...currentColResizer.parentElement.parentElement.children].indexOf(currentColResizer.parentElement);
-        table.querySelectorAll('tr').forEach(r=>{if(r.children[idx])r.children[idx].style.width=newW+'px';});
+        table.querySelectorAll('tr').forEach(r=>{
+          if(r.children[idx]) r.children[idx].style.width=newW+'px';
+        });
       }
-      function stopCol(){if(isColResizing){isColResizing=false;document.removeEventListener('mousemove',colResize);document.removeEventListener('mouseup',stopCol);debounceSave(gatherScheduleData());}}
-      // row
+      function stopCol(){
+        if(isColResizing){
+          isColResizing=false;
+          document.removeEventListener('mousemove',colResize);
+          document.removeEventListener('mouseup',stopCol);
+          debounceSave(gatherScheduleData());
+        }
+      }
+
       document.querySelectorAll('.resize-handle-row').forEach(h=>h.addEventListener('mousedown',e=>{
         isRowResizing=true;currentRowResizer=h;startY=e.pageY;startHeight=h.parentElement.parentElement.offsetHeight;
         document.addEventListener('mousemove',rowResize);document.addEventListener('mouseup',stopRow);
       }));
-      function rowResize(e){if(!isRowResizing)return;const diff=e.pageY-startY;const newH=Math.max(1,startHeight+diff);currentRowResizer.parentElement.parentElement.style.height=newH+'px';}
-      function stopRow(){if(isRowResizing){isRowResizing=false;document.removeEventListener('mousemove',rowResize);document.removeEventListener('mouseup',stopRow);debounceSave(gatherScheduleData());}}
-
-      /* ---- 초기 Firestore 데이터 로드 ---- */
-      // onSnapshot에서 자동 처리되므로 추가 코드 불필요
+      function rowResize(e){
+        if(!isRowResizing)return;
+        const diff=e.pageY-startY;
+        const newH=Math.max(1,startHeight+diff);
+        currentRowResizer.parentElement.parentElement.style.height=newH+'px';
+      }
+      function stopRow(){
+        if(isRowResizing){
+          isRowResizing=false;
+          document.removeEventListener('mousemove',rowResize);
+          document.removeEventListener('mouseup',stopRow);
+          debounceSave(gatherScheduleData());
+        }
+      }
     });
   </script>
 </head>
 <body>
   <div class="container">
-    <div class="instructions">셀 우측·하단 테두리를 드래그해 크기를 조절하고 내용을 직접 입력하세요. 모든 변경은 Firestore에 실시간 반영됩니다.</div>
+    <div class="instructions">
+      셀 우측·하단 테두리를 드래그해 크기를 조절하고 내용을 직접 입력하세요.
+      모든 변경은 Supabase에 실시간 반영됩니다.
+    </div>
+
     <div class="button-container">
       <button id="resetButton" class="button">일정 초기화</button>
       <button id="dateSettingButton" class="button">기준일 설정</button>
@@ -237,14 +290,26 @@
       <button id="tableSettingsButton" class="button">테이블 설정</button>
       <button id="exportButton" class="button">내보내기 (CSV)</button>
     </div>
+
     <!-- 날짜·설정 패널 -->
-    <div id="datePickerContainer"><input type="date" id="datePicker"><button id="confirmDateButton" class="button">확인</button></div>
+    <div id="datePickerContainer">
+      <input type="date" id="datePicker">
+      <button id="confirmDateButton" class="button">확인</button>
+    </div>
     <div id="tableSettingsContainer">
-      <div class="settings-row"><label for="tableWidthInput">테이블 너비(px):</label><input type="number" id="tableWidthInput" min="1" step="1" value="900"></div>
-      <div class="settings-row"><label for="containerWidthInput">컨테이너 너비(px):</label><input type="number" id="containerWidthInput" min="1" step="1" value="1200"></div>
+      <div class="settings-row">
+        <label for="tableWidthInput">테이블 너비(px):</label>
+        <input type="number" id="tableWidthInput" min="1" step="1" value="900">
+      </div>
+      <div class="settings-row">
+        <label for="containerWidthInput">컨테이너 너비(px):</label>
+        <input type="number" id="containerWidthInput" min="1" step="1" value="1200">
+      </div>
       <button id="applySettingsButton" class="button">적용</button>
     </div>
+
     <h1>주간 업무 일정표</h1>
+
     <!-- === 테이블 === -->
     <table id="scheduleTable">
       <thead>
