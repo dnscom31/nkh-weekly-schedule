@@ -1,825 +1,302 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>주간 업무 일정표</title>
-    <style>
-        body {
-            font-family: 'Malgun Gothic', sans-serif;
-            margin: 20px;
-            padding: 0;
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>주간 업무 일정표 – Firestore 버전</title>
+  <style>
+    /* === 원본 스타일 그대로 유지 === */
+    body {font-family:'Malgun Gothic',sans-serif;margin:20px;padding:0;}
+    .container{max-width:1200px;margin:0 auto;overflow-x:auto;}
+    h1{text-align:center;margin-bottom:20px;}
+    table{width:100%;min-width:900px;table-layout:fixed;border-collapse:collapse;margin-bottom:30px;}
+    th,td{border:1px solid #ddd;padding:12px;text-align:center;vertical-align:middle;height:120px;min-height:1px;min-width:1px;position:relative;}
+    tbody td:not(.name-column) div[contenteditable="true"]{text-align:left;padding-left:5px;white-space:pre-wrap;height:100%;min-height:1px;display:block;}
+    th{background:#f2f2f2;font-weight:bold;}
+    .name-column{background:#f2f2f2;color:#c74a3c;font-weight:bold;min-width:140px;}
+    .editable,.name-input{width:100%;height:100%;border:none;background:transparent;resize:none;box-sizing:border-box;font-family:'Malgun Gothic',sans-serif;font-size:14px;}
+    .name-input{color:#c74a3c;font-weight:bold;text-align:center;}
+    .resize-handle-col{position:absolute;top:0;right:0;width:5px;height:100%;cursor:col-resize;z-index:1;}
+    .resize-handle-row{position:absolute;left:0;bottom:0;width:100%;height:5px;cursor:row-resize;z-index:1;}
+    .instructions{text-align:center;margin-bottom:20px;color:#666;font-size:14px;}
+    .button-container{text-align:center;margin-bottom:20px;display:flex;justify-content:center;flex-wrap:wrap;gap:10px;}
+    .button{padding:10px 20px;background:#4CAF50;color:#fff;border:none;border-radius:4px;cursor:pointer;font-family:'Malgun Gothic',sans-serif;}
+    .button:hover{background:#45a049;}
+    #datePickerContainer,#tableSettingsContainer{display:none;text-align:center;margin:20px 0;padding:15px;background:#f9f9f9;border:1px solid #ddd;border-radius:4px;}
+    #datePicker{padding:8px;font-family:'Malgun Gothic',sans-serif;}
+    .settings-row{margin:10px 0;display:flex;justify-content:center;align-items:center;}
+    .settings-row label{margin-right:10px;font-weight:bold;width:180px;text-align:right;}
+    .settings-row input{width:100px;padding:8px;border:1px solid #ddd;border-radius:4px;}
+  </style>
+  <!-- SheetJS (엑셀 내보내기용) -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <!-- Firebase SDK (모듈 버전) -->
+  <script type="module">
+    /* ===== Firebase 초기화 ===== */
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+    // *** 여기에 본인 프로젝트 설정 붙여넣기 ***
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_PROJECT_ID.appspot.com",
+      messagingSenderId: "SENDER_ID",
+      appId: "APP_ID"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db  = getFirestore(app);
+    const docRef = doc(db, "schedules", "weekly"); // schedules 컬렉션, weekly 문서
+
+    /* ===== DOMContentLoaded 이후 로직 ===== */
+    document.addEventListener('DOMContentLoaded', () => {
+      /* ---- 요소 참조 ---- */
+      const table                 = document.getElementById('scheduleTable');
+      const resetButton           = document.getElementById('resetButton');
+      const dateSettingButton     = document.getElementById('dateSettingButton');
+      const datePickerContainer   = document.getElementById('datePickerContainer');
+      const datePicker            = document.getElementById('datePicker');
+      const confirmDateButton     = document.getElementById('confirmDateButton');
+      const saveButton            = document.getElementById('saveButton');
+      const tableSettingsButton   = document.getElementById('tableSettingsButton');
+      const tableSettingsContainer= document.getElementById('tableSettingsContainer');
+      const tableWidthInput       = document.getElementById('tableWidthInput');
+      const containerWidthInput   = document.getElementById('containerWidthInput');
+      const applySettingsButton   = document.getElementById('applySettingsButton');
+      const exportButton          = document.getElementById('exportButton');
+
+      /* ---- 날짜 기본값 ---- */
+      datePicker.value = new Date().toISOString().split('T')[0];
+
+      /* ---- 리사이즈 핸들 변수 ---- */
+      let isColResizing=false,startX,startWidth,currentColResizer;
+      let isRowResizing=false,startY,startHeight,currentRowResizer;
+
+      /* ---- Firestore 저장 디바운스 ---- */
+      let saveTimer=null;
+      function debounceSave(data){
+        clearTimeout(saveTimer);
+        saveTimer=setTimeout(()=>setDoc(docRef,data),300);
+      }
+
+      /* ---- 공통 데이터 수집 ---- */
+      function gatherScheduleData(){
+        const headerRow = table.querySelector('thead tr');
+        const headers   = Array.from(headerRow.children).map(th=>th.querySelector('div[contenteditable="true"]').innerHTML);
+        const names=[]; const content=[];
+        table.querySelectorAll('tbody tr').forEach(row=>{
+          names.push(row.querySelector('.name-column div[contenteditable="true"]').innerHTML);
+          const rowData=[];
+          row.querySelectorAll('td:not(.name-column)').forEach(cell=>{
+            rowData.push(cell.querySelector('div[contenteditable="true"]').innerHTML);
+          });
+          content.push(rowData);
+        });
+        // 열/행 크기
+        const dim={columns:[],rows:[]};
+        const firstRow=table.querySelector('tr');
+        Array.from(firstRow.children).forEach(c=>dim.columns.push(c.offsetWidth));
+        table.querySelectorAll('tr').forEach(r=>dim.rows.push(r.offsetHeight));
+        // 테이블 설정
+        const settings={tableWidth:parseInt(table.style.minWidth)||900,containerWidth:parseInt(document.querySelector('.container').style.maxWidth)||1200};
+        return {headers,names,content,dim,settings,updated:Date.now()};
+      }
+      /* ---- Firestore → 화면 로드 ---- */
+      function loadScheduleIntoTable(data){
+        if(!data) return;
+        // 헤더
+        const headerRow=table.querySelector('thead tr');
+        Array.from(headerRow.children).forEach((th,i)=>{
+          const div=th.querySelector('div[contenteditable="true"]');
+          if(div&&data.headers[i]!==undefined) div.innerHTML=data.headers[i];
+        });
+        // 바디
+        table.querySelectorAll('tbody tr').forEach((row,ri)=>{
+          const nameCell=row.querySelector('.name-column div[contenteditable="true"]');
+          if(nameCell&&data.names[ri]!==undefined) nameCell.innerHTML=data.names[ri];
+          row.querySelectorAll('td:not(.name-column)').forEach((cell,ci)=>{
+            const div=cell.querySelector('div[contenteditable="true"]');
+            if(div&&data.content[ri]&&data.content[ri][ci]!==undefined) div.innerHTML=data.content[ri][ci];
+          });
+        });
+        // 크기
+        if(data.dim){
+          table.querySelectorAll('tr').forEach((row,ri)=>{
+            if(data.dim.rows[ri]) row.style.height=data.dim.rows[ri]+'px';
+            Array.from(row.children).forEach((cell,ci)=>{
+              if(data.dim.columns[ci]) cell.style.width=data.dim.columns[ci]+'px';
+            });
+          });
         }
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            overflow-x: auto;
+        // 설정
+        if(data.settings){
+          table.style.minWidth=data.settings.tableWidth+'px';
+          document.querySelector('.container').style.maxWidth=data.settings.containerWidth+'px';
         }
-        h1 {
-            text-align: center;
-            margin-bottom: 20px;
+      }
+
+      /* ---- Firestore 실시간 구독 ---- */
+      onSnapshot(docRef,(snap)=>{
+        if(snap.exists()) loadScheduleIntoTable(snap.data());
+      });
+
+      /* ---- 셀 편집 이벤트 → 저장 ---- */
+      table.addEventListener('input',()=>debounceSave(gatherScheduleData()));
+
+      /* ---- 버튼 핸들러 ---- */
+      resetButton.addEventListener('click',()=>{
+        table.querySelectorAll('tbody tr td:not(.name-column) div[contenteditable="true"]').forEach(div=>div.innerHTML='');
+        debounceSave(gatherScheduleData());
+      });
+      dateSettingButton.addEventListener('click',()=>{
+        datePickerContainer.style.display=(datePickerContainer.style.display==='block')?'none':'block';
+        tableSettingsContainer.style.display='none';
+      });
+      confirmDateButton.addEventListener('click',()=>{
+        const baseDate=new Date(datePicker.value);
+        const days=['일','월','화','수','목','금','토'];
+        const headerRow=table.querySelector('thead tr');
+        for(let i=1;i<headerRow.children.length;i++){
+          const d=new Date(baseDate);d.setDate(baseDate.getDate()+i-1);
+          const txt=`${d.getMonth()+1}/${d.getDate()} (${days[d.getDay()]})`;
+          headerRow.children[i].querySelector('div[contenteditable="true"]').textContent=txt;
         }
-        table {
-            width: 100%;
-            min-width: 900px;
-            table-layout: fixed;
-            border-collapse: collapse;
-            margin-bottom: 30px;
-        }
-        th, td {
-            border: 1px solid #ddd;
-            padding: 12px;
-            text-align: center;
-            vertical-align: middle;
-            height: 120px;
-            min-height: 1px;
-            min-width: 1px;
-            position: relative;
-        }
-        /* 내용 셀(2행 2열~5행 7열)만 왼쪽 정렬 */
-        tbody td:not(.name-column) div[contenteditable="true"] {
-            text-align: left;
-            padding-left: 5px;
-            white-space: pre-wrap; /* 줄바꿈 보존 */
-            height: 100%;
-            min-height: 1px;
-            display: block; /* 블록 요소로 만들어서 전체 공간 차지 */
-        }
-        th {
-            background-color: #f2f2f2;
-            font-weight: bold;
-        }
-        .name-column {
-            background-color: #f2f2f2;
-            color: #c74a3c;
-            font-weight: bold;
-            min-width: 140px;
-        }
-        .title {
-            text-align: center;
-            font-weight: bold;
-            margin-bottom: 10px;
-        }
-        .subtitle {
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        .editable {
-            width: 100%;
-            height: 100%;
-            border: none;
-            background: transparent;
-            resize: none;
-            box-sizing: border-box;
-            font-family: 'Malgun Gothic', sans-serif;
-            font-size: 14px;
-        }
-        .name-input {
-            width: 100%;
-            border: none;
-            background: transparent;
-            color: #c74a3c;
-            font-weight: bold;
-            text-align: center;
-            font-family: 'Malgun Gothic', sans-serif;
-            font-size: 14px;
-        }
-        .resize-handle-col {
-            position: absolute;
-            top: 0;
-            right: 0;
-            width: 5px;
-            height: 100%;
-            cursor: col-resize;
-            z-index: 1;
-        }
-        .resize-handle-row {
-            position: absolute;
-            left: 0;
-            bottom: 0;
-            width: 100%;
-            height: 5px;
-            cursor: row-resize;
-            z-index: 1;
-        }
-        .instructions {
-            text-align: center;
-            margin-bottom: 20px;
-            color: #666;
-            font-size: 14px;
-        }
-        .button-container {
-            text-align: center;
-            margin-bottom: 20px;
-            display: flex;
-            justify-content: center;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-        .button {
-            padding: 10px 20px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-family: 'Malgun Gothic', sans-serif;
-        }
-        .button:hover {
-            background-color: #45a049;
-        }
-        #datePickerContainer, #tableSettingsContainer {
-            display: none;
-            text-align: center;
-            margin: 20px 0;
-            padding: 15px;
-            background-color: #f9f9f9;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-        }
-        #datePicker {
-            padding: 8px;
-            font-family: 'Malgun Gothic', sans-serif;
-        }
-        .settings-row {
-            margin: 10px 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-        .settings-row label {
-            margin-right: 10px;
-            font-weight: bold;
-            width: 180px;
-            text-align: right;
-        }
-        .settings-row input {
-            width: 100px;
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-        }
-    </style>
+        datePickerContainer.style.display='none';
+        debounceSave(gatherScheduleData());
+      });
+      saveButton.addEventListener('click',()=>debounceSave(gatherScheduleData()));
+      tableSettingsButton.addEventListener('click',()=>{
+        tableSettingsContainer.style.display=(tableSettingsContainer.style.display==='block')?'none':'block';
+        datePickerContainer.style.display='none';
+        tableWidthInput.value=parseInt(table.style.minWidth)||900;
+        containerWidthInput.value=parseInt(document.querySelector('.container').style.maxWidth)||1200;
+      });
+      applySettingsButton.addEventListener('click',()=>{
+        const tw=parseInt(tableWidthInput.value)||900;
+        const cw=parseInt(containerWidthInput.value)||1200;
+        table.style.minWidth=tw+'px';
+        document.querySelector('.container').style.maxWidth=cw+'px';
+        tableSettingsContainer.style.display='none';
+        debounceSave(gatherScheduleData());
+      });
+      // CSV/Excel 내보내기
+      exportButton.addEventListener('click',()=>{
+        const d=gatherScheduleData();
+        const rows=[d.headers,...d.names.map((n,i)=>[n,...d.content[i]])];
+        const csv=rows.map(r=>r.map(v=>`"${v.replaceAll('"','""')}"`).join(',')).join('\n');
+        const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+        const url=URL.createObjectURL(blob);
+        const a=document.createElement('a');
+        a.href=url;a.download='weekly_schedule.csv';a.click();URL.revokeObjectURL(url);
+        // Excel - 코멘트 해제 시 사용
+        /*
+        const ws=XLSX.utils.aoa_to_sheet(rows);
+        const wb=XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb,ws,'Schedule');
+        XLSX.writeFile(wb,'weekly_schedule.xlsx');
+        */
+      });
+
+      /* ---- 셀 Enter 줄바꿈 처리 ---- */
+      table.querySelectorAll('div[contenteditable="true"]').forEach(div=>{
+        div.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();document.execCommand('insertHTML',false,'<br>');}});
+      });
+
+      /* ---- 열/행 리사이즈 ---- */
+      // col
+      document.querySelectorAll('.resize-handle-col').forEach(h=>h.addEventListener('mousedown',e=>{
+        isColResizing=true;currentColResizer=h;startX=e.pageX;startWidth=h.parentElement.offsetWidth;
+        document.addEventListener('mousemove',colResize);document.addEventListener('mouseup',stopCol);
+      }));
+      function colResize(e){if(!isColResizing)return;const diff=e.pageX-startX;const newW=Math.max(1,startWidth+diff);
+        const idx=[...currentColResizer.parentElement.parentElement.children].indexOf(currentColResizer.parentElement);
+        table.querySelectorAll('tr').forEach(r=>{if(r.children[idx])r.children[idx].style.width=newW+'px';});
+      }
+      function stopCol(){if(isColResizing){isColResizing=false;document.removeEventListener('mousemove',colResize);document.removeEventListener('mouseup',stopCol);debounceSave(gatherScheduleData());}}
+      // row
+      document.querySelectorAll('.resize-handle-row').forEach(h=>h.addEventListener('mousedown',e=>{
+        isRowResizing=true;currentRowResizer=h;startY=e.pageY;startHeight=h.parentElement.parentElement.offsetHeight;
+        document.addEventListener('mousemove',rowResize);document.addEventListener('mouseup',stopRow);
+      }));
+      function rowResize(e){if(!isRowResizing)return;const diff=e.pageY-startY;const newH=Math.max(1,startHeight+diff);currentRowResizer.parentElement.parentElement.style.height=newH+'px';}
+      function stopRow(){if(isRowResizing){isRowResizing=false;document.removeEventListener('mousemove',rowResize);document.removeEventListener('mouseup',stopRow);debounceSave(gatherScheduleData());}}
+
+      /* ---- 초기 Firestore 데이터 로드 ---- */
+      // onSnapshot에서 자동 처리되므로 추가 코드 불필요
+    });
+  </script>
 </head>
 <body>
-    <div class="container">
-        <div class="instructions">셀의 오른쪽 테두리를 드래그하여 너비를, 아래쪽 테두리를 드래그하여 높이를 조절할 수 있습니다. 모든 셀 내용은 수정 가능합니다.</div>
-        
-        <div class="button-container">
-            <button id="resetButton" class="button">일정 초기화</button>
-            <button id="dateSettingButton" class="button">기준일 설정</button>
-            <button id="saveButton" class="button">저장</button>
-            <button id="tableSettingsButton" class="button">테이블 설정</button>
-        </div>
-        
-        <div id="datePickerContainer">
-            <input type="date" id="datePicker">
-            <button id="confirmDateButton" class="button">확인</button>
-        </div>
-        
-        <div id="tableSettingsContainer">
-            <div class="settings-row">
-                <label for="tableWidthInput">테이블 너비 (px):</label>
-                <input type="number" id="tableWidthInput" min="1" step="1" value="900">
-            </div>
-            <div class="settings-row">
-                <label for="containerWidthInput">컨테이너 너비 (px):</label>
-                <input type="number" id="containerWidthInput" min="1" step="1" value="1200">
-            </div>
-            <button id="applySettingsButton" class="button">적용</button>
-        </div>
-        
-        <h1>주간 업무 일정표</h1>
-        
-        <table id="scheduleTable">
-            <thead>
-                <tr>
-                    <th>
-                        <div contenteditable="true">구분</div>
-                        <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
-                    </th>
-                    <th>
-                        <div contenteditable="true">4/7 (월)</div>
-                        <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
-                    </th>
-                    <th>
-                        <div contenteditable="true">4/8 (화)</div>
-                        <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
-                    </th>
-                    <th>
-                        <div contenteditable="true">4/9 (수)</div>
-                        <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
-                    </th>
-                    <th>
-                        <div contenteditable="true">4/10 (목)</div>
-                        <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
-                    </th>
-                    <th>
-                        <div contenteditable="true">4/11 (금)</div>
-                        <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
-                    </th>
-                    <th>
-                        <div contenteditable="true">4/12 (토)</div>
-                        <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
-                    </th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td class="name-column">
-                        <div contenteditable="true">이대성</div>
-                        <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
-                    </td>
-                    <td>
-                        <div contenteditable="true"></div>
-                        <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
-                    </td>
-                    <td>
-                        <div contenteditable="true"></div>
-                        <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
-                    </td>
-                    <td>
-                        <div contenteditable="true"></div>
-                        <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
-                    </td>
-                    <td>
-                        <div contenteditable="true"></div>
-                        <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
-                    </td>
-                    <td>
-                        <div contenteditable="true"></div>
-                        <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
-                    </td>
-                    <td>
-                        <div contenteditable="true"></div>
-                        <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
-                    </td>
-                </tr>
-                <tr>
-                    <td class="name-column">
-                        <div contenteditable="true">강경복</div>
-                        <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
-                    </td>
-                    <td>
-                        <div contenteditable="true"></div>
-                        <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
-                    </td>
-                    <td>
-                        <div contenteditable="true"></div>
-                        <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
-                    </td>
-                    <td>
-                        <div contenteditable="true"></div>
-                        <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
-                    </td>
-                    <td>
-                        <div contenteditable="true"></div>
-                        <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
-                    </td>
-                    <td>
-                        <div contenteditable="true"></div>
-                        <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
-                    </td>
-                    <td>
-                        <div contenteditable="true"></div>
-                        <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
-                    </td>
-                </tr>
-                <tr>
-                    <td class="name-column">
-                        <div contenteditable="true">윤명한</div>
-                        <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
-                    </td>
-                    <td>
-                        <div contenteditable="true"></div>
-                        <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
-                    </td>
-                    <td>
-                        <div contenteditable="true"></div>
-                        <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
-                    </td>
-                    <td>
-                        <div contenteditable="true"></div>
-                        <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
-                    </td>
-                    <td>
-                        <div contenteditable="true"></div>
-                        <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
-                    </td>
-                    <td>
-                        <div contenteditable="true"></div>
-                        <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
-                    </td>
-                    <td>
-                        <div contenteditable="true"></div>
-                        <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
-                    </td>
-                </tr>
-                <tr>
-                    <td class="name-column">
-                        <div contenteditable="true">이준환</div>
-                        <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
-                    </td>
-                    <td>
-                        <div contenteditable="true"></div>
-                        <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
-                    </td>
-                    <td>
-                        <div contenteditable="true"></div>
-                        <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
-                    </td>
-                    <td>
-                        <div contenteditable="true"></div>
-                        <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
-                    </td>
-                    <td>
-                        <div contenteditable="true"></div>
-                        <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
-                    </td>
-                    <td>
-                        <div contenteditable="true"></div>
-                        <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
-                    </td>
-                    <td>
-                        <div contenteditable="true"></div>
-                        <div class="resize-handle-col"></div>
-                        <div class="resize-handle-row"></div>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
+  <div class="container">
+    <div class="instructions">셀 우측·하단 테두리를 드래그해 크기를 조절하고 내용을 직접 입력하세요. 모든 변경은 Firestore에 실시간 반영됩니다.</div>
+    <div class="button-container">
+      <button id="resetButton" class="button">일정 초기화</button>
+      <button id="dateSettingButton" class="button">기준일 설정</button>
+      <button id="saveButton" class="button">즉시 저장</button>
+      <button id="tableSettingsButton" class="button">테이블 설정</button>
+      <button id="exportButton" class="button">내보내기 (CSV)</button>
     </div>
-
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const table = document.getElementById('scheduleTable');
-            const resetButton = document.getElementById('resetButton');
-            const dateSettingButton = document.getElementById('dateSettingButton');
-            const datePickerContainer = document.getElementById('datePickerContainer');
-            const datePicker = document.getElementById('datePicker');
-            const confirmDateButton = document.getElementById('confirmDateButton');
-            const saveButton = document.getElementById('saveButton');
-            const tableSettingsButton = document.getElementById('tableSettingsButton');
-            const tableSettingsContainer = document.getElementById('tableSettingsContainer');
-            const tableWidthInput = document.getElementById('tableWidthInput');
-            const containerWidthInput = document.getElementById('containerWidthInput');
-            const applySettingsButton = document.getElementById('applySettingsButton');
-            
-            // 현재 날짜로 기본값 설정
-            const today = new Date();
-            const formattedDate = today.toISOString().split('T')[0];
-            datePicker.value = formattedDate;
-            
-            // 열 크기 조절 변수
-            let isColResizing = false;
-            let currentColResizer = null;
-            let startX, startWidth;
-            
-            // 행 크기 조절 변수
-            let isRowResizing = false;
-            let currentRowResizer = null;
-            let startY, startHeight;
-
-            // 열 크기 조절 이벤트 리스너
-            document.querySelectorAll('.resize-handle-col').forEach(handle => {
-                handle.addEventListener('mousedown', function(e) {
-                    isColResizing = true;
-                    currentColResizer = this;
-                    startX = e.pageX;
-                    
-                    const cell = this.parentElement;
-                    startWidth = cell.offsetWidth;
-                    
-                    document.addEventListener('mousemove', handleColResize);
-                    document.addEventListener('mouseup', stopColResize);
-                    e.preventDefault();
-                });
-            });
-            
-            // 행 크기 조절 이벤트 리스너
-            document.querySelectorAll('.resize-handle-row').forEach(handle => {
-                handle.addEventListener('mousedown', function(e) {
-                    isRowResizing = true;
-                    currentRowResizer = this;
-                    startY = e.pageY;
-                    
-                    const cell = this.parentElement;
-                    const row = cell.parentElement;
-                    startHeight = row.offsetHeight;
-                    
-                    document.addEventListener('mousemove', handleRowResize);
-                    document.addEventListener('mouseup', stopRowResize);
-                    e.preventDefault();
-                });
-            });
-            
-            // contentEditable에서 Enter 키 처리
-            document.querySelectorAll('div[contenteditable="true"]').forEach(div => {
-                div.addEventListener('keydown', function(e) {
-                    if (e.key === 'Enter') {
-                        // 기본 Enter 동작 방지
-                        e.preventDefault();
-                        
-                        // <br> 태그 삽입
-                        document.execCommand('insertHTML', false, '<br>');
-                    }
-                });
-            });
-
-            // 일정 초기화 버튼 이벤트 리스너
-            resetButton.addEventListener('click', function() {
-                resetSchedule();
-            });
-            
-            // 기준일 설정 버튼 이벤트 리스너
-            dateSettingButton.addEventListener('click', function() {
-                toggleDatePicker();
-            });
-            
-            // 날짜 확인 버튼 이벤트 리스너
-            confirmDateButton.addEventListener('click', function() {
-                setBaseDateAndUpdate();
-                datePickerContainer.style.display = 'none';
-            });
-            
-            // 저장 버튼 이벤트 리스너
-            saveButton.addEventListener('click', function() {
-                saveScheduleData();
-                saveDimensions();
-                alert('일정이 저장되었습니다.');
-            });
-            
-            // 테이블 설정 버튼 이벤트 리스너
-            tableSettingsButton.addEventListener('click', function() {
-                toggleTableSettings();
-            });
-            
-            // 테이블 설정 적용 버튼 이벤트 리스너
-            applySettingsButton.addEventListener('click', function() {
-                applyTableSettings();
-            });
-
-            // 열 크기 조절 핸들러
-            function handleColResize(e) {
-                if (!isColResizing) return;
-                
-                const cell = currentColResizer.parentElement;
-                const diff = e.pageX - startX;
-                const newWidth = Math.max(1, startWidth + diff);  // 최소 너비 1px
-                
-                // 현재 열의 인덱스 찾기
-                const colIndex = Array.from(cell.parentElement.children).indexOf(cell);
-                
-                // 모든 행의 해당 열에 같은 너비 적용
-                const rows = table.querySelectorAll('tr');
-                
-                rows.forEach(row => {
-                    if (row.children[colIndex]) {
-                        row.children[colIndex].style.width = newWidth + 'px';
-                    }
-                });
-            }
-
-            // 열 크기 조절 중지
-            function stopColResize() {
-                if (isColResizing) {
-                    isColResizing = false;
-                    saveDimensions();  // 크기 변경 후 저장
-                    document.removeEventListener('mousemove', handleColResize);
-                    document.removeEventListener('mouseup', stopColResize);
-                }
-            }
-            
-            // 행 크기 조절 핸들러
-            function handleRowResize(e) {
-                if (!isRowResizing) return;
-                
-                const cell = currentRowResizer.parentElement;
-                const row = cell.parentElement;
-                const diff = e.pageY - startY;
-                const newHeight = Math.max(1, startHeight + diff);  // 최소 높이 1px
-                
-                // 현재 행에 높이 적용
-                row.style.height = newHeight + 'px';
-            }
-            
-            // 행 크기 조절 중지
-            function stopRowResize() {
-                if (isRowResizing) {
-                    isRowResizing = false;
-                    saveDimensions();  // 크기 변경 후 저장
-                    document.removeEventListener('mousemove', handleRowResize);
-                    document.removeEventListener('mouseup', stopRowResize);
-                }
-            }
-            
-            // 일정 초기화 함수 - 구분 행과 열을 제외한 내용 초기화
-            function resetSchedule() {
-                const rows = table.querySelectorAll('tbody tr');
-                
-                rows.forEach(row => {
-                    const cells = row.querySelectorAll('td:not(.name-column)');
-                    cells.forEach(cell => {
-                        const contentDiv = cell.querySelector('div[contenteditable="true"]');
-                        if (contentDiv) {
-                            contentDiv.innerHTML = '';
-                        }
-                    });
-                });
-                
-                // 초기화 후 저장
-                saveScheduleData();
-                alert('일정이 초기화되었습니다.');
-            }
-            
-            // 날짜 선택기 토글 함수
-            function toggleDatePicker() {
-                if (datePickerContainer.style.display === 'none' || datePickerContainer.style.display === '') {
-                    datePickerContainer.style.display = 'block';
-                    tableSettingsContainer.style.display = 'none';
-                } else {
-                    datePickerContainer.style.display = 'none';
-                }
-            }
-            
-            // 테이블 설정 토글 함수
-            function toggleTableSettings() {
-                if (tableSettingsContainer.style.display === 'none' || tableSettingsContainer.style.display === '') {
-                    tableSettingsContainer.style.display = 'block';
-                    datePickerContainer.style.display = 'none';
-                    
-                // 현재 값 로드
-                    const savedSettings = loadTableSettings();
-                    tableWidthInput.value = savedSettings.tableWidth;
-                    containerWidthInput.value = savedSettings.containerWidth;
-                } else {
-                    tableSettingsContainer.style.display = 'none';
-                }
-            }
-            
-            // 테이블 설정 적용 함수
-            function applyTableSettings() {
-                const tableWidth = parseInt(tableWidthInput.value) || 900;
-                const containerWidth = parseInt(containerWidthInput.value) || 1200;
-                
-                // 유효성 검사
-                if (tableWidth < 1 || containerWidth < 1) {
-                    alert('너비는 최소 1px 이상이어야 합니다.');
-                    return;
-                }
-                
-                // 설정 적용
-                table.style.minWidth = tableWidth + 'px';
-                document.querySelector('.container').style.maxWidth = containerWidth + 'px';
-                
-                // 설정 저장
-                saveTableSettings(tableWidth, containerWidth);
-                
-                tableSettingsContainer.style.display = 'none';
-                alert('테이블 설정이 적용되었습니다.');
-            }
-            
-            // 테이블 설정 저장 함수
-            function saveTableSettings(tableWidth, containerWidth) {
-                const settings = {
-                    tableWidth: tableWidth,
-                    containerWidth: containerWidth
-                };
-                localStorage.setItem('tableSettings', JSON.stringify(settings));
-            }
-            
-            // 테이블 설정 불러오기 함수
-            function loadTableSettings() {
-                const savedSettings = localStorage.getItem('tableSettings');
-                if (savedSettings) {
-                    return JSON.parse(savedSettings);
-                }
-                return {
-                    tableWidth: 900,
-                    containerWidth: 1200
-                };
-            }
-            
-            // 저장된 테이블 설정 적용
-            function applyStoredTableSettings() {
-                const settings = loadTableSettings();
-                table.style.minWidth = settings.tableWidth + 'px';
-                document.querySelector('.container').style.maxWidth = settings.containerWidth + 'px';
-            }
-            
-            // 행과 열 크기 저장 함수
-            function saveDimensions() {
-                const dimensions = {
-                    columns: [],
-                    rows: []
-                };
-                
-                // 열 너비 저장
-                const firstRow = table.querySelector('tr');
-                Array.from(firstRow.children).forEach(cell => {
-                    dimensions.columns.push(cell.offsetWidth);
-                });
-                
-                // 행 높이 저장
-                const rows = table.querySelectorAll('tr');
-                rows.forEach(row => {
-                    dimensions.rows.push(row.offsetHeight);
-                });
-                
-                localStorage.setItem('tableDimensions', JSON.stringify(dimensions));
-            }
-            
-            // 저장된 행과 열 크기 적용
-            function applyStoredDimensions() {
-                const savedDimensions = localStorage.getItem('tableDimensions');
-                if (!savedDimensions) return;
-                
-                try {
-                    const dimensions = JSON.parse(savedDimensions);
-                    
-                    // 열 너비 적용
-                    const rows = table.querySelectorAll('tr');
-                    rows.forEach(row => {
-                        Array.from(row.children).forEach((cell, index) => {
-                            if (dimensions.columns[index]) {
-                                cell.style.width = dimensions.columns[index] + 'px';
-                            }
-                        });
-                    });
-                    
-                    // 행 높이 적용
-                    rows.forEach((row, index) => {
-                        if (dimensions.rows[index]) {
-                            row.style.height = dimensions.rows[index] + 'px';
-                        }
-                    });
-                } catch (error) {
-                    console.error('크기 데이터 로드 오류:', error);
-                }
-            }
-            
-            // 기준일 설정 및 날짜 업데이트 함수
-            function setBaseDateAndUpdate() {
-                const baseDate = new Date(datePicker.value);
-                if (isNaN(baseDate.getTime())) {
-                    alert('유효한 날짜를 선택해주세요.');
-                    return;
-                }
-                
-                const headerRow = table.querySelector('thead tr');
-                const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
-                
-                // 첫 번째 열은 '구분'이므로 건너뜀
-                for (let i = 1; i < headerRow.children.length; i++) {
-                    const currentDate = new Date(baseDate);
-                    currentDate.setDate(baseDate.getDate() + (i - 1));
-                    
-                    const month = currentDate.getMonth() + 1;
-                    const day = currentDate.getDate();
-                    const dayName = dayNames[currentDate.getDay()];
-                    
-                    const headerCell = headerRow.children[i];
-                    const contentDiv = headerCell.querySelector('div[contenteditable="true"]');
-                    if (contentDiv) {
-                        contentDiv.textContent = `${month}/${day} (${dayName})`;
-                    }
-                }
-                
-                // 날짜 업데이트 후 저장
-                saveScheduleData();
-                alert('기준일이 설정되었습니다.');
-            }
-            
-            // 데이터 저장 함수
-            function saveScheduleData() {
-                const scheduleData = {
-                    headers: [],
-                    names: [],
-                    content: []
-                };
-                
-                // 헤더(날짜) 저장
-                const headerRow = table.querySelector('thead tr');
-                Array.from(headerRow.children).forEach(th => {
-                    const contentDiv = th.querySelector('div[contenteditable="true"]');
-                    scheduleData.headers.push(contentDiv ? contentDiv.innerHTML : '');
-                });
-                
-                // 이름과 일정 내용 저장
-                const rows = table.querySelectorAll('tbody tr');
-                rows.forEach(row => {
-                    const rowData = [];
-                    
-                    // 이름 저장
-                    const nameCell = row.querySelector('.name-column div[contenteditable="true"]');
-                    scheduleData.names.push(nameCell ? nameCell.innerHTML : '');
-                    
-                    // 셀 내용 저장 - innerHTML 사용하여 줄바꿈 보존
-                    const cells = row.querySelectorAll('td:not(.name-column)');
-                    cells.forEach(cell => {
-                        const contentDiv = cell.querySelector('div[contenteditable="true"]');
-                        rowData.push(contentDiv ? contentDiv.innerHTML : '');
-                    });
-                    
-                    scheduleData.content.push(rowData);
-                });
-                
-                // 로컬 스토리지에 저장
-                localStorage.setItem('weeklyScheduleData', JSON.stringify(scheduleData));
-            }
-            
-            // 저장된 데이터 불러오기 함수
-            function loadSavedData() {
-                const savedData = localStorage.getItem('weeklyScheduleData');
-                if (!savedData) return;
-                
-                try {
-                    const scheduleData = JSON.parse(savedData);
-                    
-                    // 헤더(날짜) 복원
-                    const headerRow = table.querySelector('thead tr');
-                    Array.from(headerRow.children).forEach((th, index) => {
-                        if (scheduleData.headers[index]) {
-                            const contentDiv = th.querySelector('div[contenteditable="true"]');
-                            if (contentDiv) {
-                                contentDiv.innerHTML = scheduleData.headers[index];
-                            }
-                        }
-                    });
-                    
-                    // 이름과 일정 내용 복원
-                    const rows = table.querySelectorAll('tbody tr');
-                    rows.forEach((row, rowIndex) => {
-                        // 이름 복원
-                        const nameCell = row.querySelector('.name-column div[contenteditable="true"]');
-                        if (nameCell && scheduleData.names[rowIndex]) {
-                            nameCell.innerHTML = scheduleData.names[rowIndex];
-                        }
-                        
-                        // 셀 내용 복원 - innerHTML 사용하여 줄바꿈 포함 복원
-                        const cells = row.querySelectorAll('td:not(.name-column)');
-                        cells.forEach((cell, cellIndex) => {
-                            const contentDiv = cell.querySelector('div[contenteditable="true"]');
-                            if (contentDiv && scheduleData.content[rowIndex] && scheduleData.content[rowIndex][cellIndex]) {
-                                contentDiv.innerHTML = scheduleData.content[rowIndex][cellIndex];
-                            }
-                        });
-                    });
-                    
-                } catch (error) {
-                    console.error('데이터 로드 오류:', error);
-                }
-            }
-            
-            // 페이지 로드 시 실행할 함수들
-            function initializePage() {
-                // 저장된 데이터 불러오기
-                loadSavedData();
-                
-                // 저장된 테이블 설정 적용
-                applyStoredTableSettings();
-                
-                // 저장된 행과 열 크기 적용
-                applyStoredDimensions();
-            }
-            
-            // 페이지 초기화 실행
-            initializePage();
-        });
-    </script>
+    <!-- 날짜·설정 패널 -->
+    <div id="datePickerContainer"><input type="date" id="datePicker"><button id="confirmDateButton" class="button">확인</button></div>
+    <div id="tableSettingsContainer">
+      <div class="settings-row"><label for="tableWidthInput">테이블 너비(px):</label><input type="number" id="tableWidthInput" min="1" step="1" value="900"></div>
+      <div class="settings-row"><label for="containerWidthInput">컨테이너 너비(px):</label><input type="number" id="containerWidthInput" min="1" step="1" value="1200"></div>
+      <button id="applySettingsButton" class="button">적용</button>
+    </div>
+    <h1>주간 업무 일정표</h1>
+    <!-- === 테이블 === -->
+    <table id="scheduleTable">
+      <thead>
+        <tr>
+          <th><div contenteditable="true">구분</div><div class="resize-handle-col"></div><div class="resize-handle-row"></div></th>
+          <th><div contenteditable="true">4/7 (월)</div><div class="resize-handle-col"></div><div class="resize-handle-row"></div></th>
+          <th><div contenteditable="true">4/8 (화)</div><div class="resize-handle-col"></div><div class="resize-handle-row"></div></th>
+          <th><div contenteditable="true">4/9 (수)</div><div class="resize-handle-col"></div><div class="resize-handle-row"></div></th>
+          <th><div contenteditable="true">4/10 (목)</div><div class="resize-handle-col"></div><div class="resize-handle-row"></div></th>
+          <th><div contenteditable="true">4/11 (금)</div><div class="resize-handle-col"></div><div class="resize-handle-row"></div></th>
+          <th><div contenteditable="true">4/12 (토)</div><div class="resize-handle-col"></div><div class="resize-handle-row"></div></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="name-column"><div contenteditable="true">이대성</div><div class="resize-handle-col"></div><div class="resize-handle-row"></div></td>
+          <td><div contenteditable="true"></div><div class="resize-handle-col"></div><div class="resize-handle-row"></div></td>
+          <td><div contenteditable="true"></div><div class="resize-handle-col"></div><div class="resize-handle-row"></div></td>
+          <td><div contenteditable="true"></div><div class="resize-handle-col"></div><div class="resize-handle-row"></div></td>
+          <td><div contenteditable="true"></div><div class="resize-handle-col"></div><div class="resize-handle-row"></div></td>
+          <td><div contenteditable="true"></div><div class="resize-handle-col"></div><div class="resize-handle-row"></div></td>
+          <td><div contenteditable="true"></div><div class="resize-handle-col"></div><div class="resize-handle-row"></div></td>
+        </tr>
+        <tr>
+          <td class="name-column"><div contenteditable="true">강경복</div><div class="resize-handle-col"></div><div class="resize-handle-row"></div></td>
+          <td><div contenteditable="true"></div><div class="resize-handle-col"></div><div class="resize-handle-row"></div></td>
+          <td><div contenteditable="true"></div><div class="resize-handle-col"></div><div class="resize-handle-row"></div></td>
+          <td><div contenteditable="true"></div><div class="resize-handle-col"></div><div class="resize-handle-row"></div></td>
+          <td><div contenteditable="true"></div><div class="resize-handle-col"></div><div class="resize-handle-row"></div></td>
+          <td><div contenteditable="true"></div><div class="resize-handle-col"></div><div class="resize-handle-row"></div></td>
+          <td><div contenteditable="true"></div><div class="resize-handle-col"></div><div class="resize-handle-row"></div></td>
+        </tr>
+        <tr>
+          <td class="name-column"><div contenteditable="true">윤명한</div><div class="resize-handle-col"></div><div class="resize-handle-row"></div></td>
+          <td><div contenteditable="true"></div><div class="resize-handle-col"></div><div class="resize-handle-row"></div></td>
+          <td><div contenteditable="true"></div><div class="resize-handle-col"></div><div class="resize-handle-row"></div></td>
+          <td><div contenteditable="true"></div><div class="resize-handle-col"></div><div class="resize-handle-row"></div></td>
+          <td><div contenteditable="true"></div><div class="resize-handle-col"></div><div class="resize-handle-row"></div></td>
+          <td><div contenteditable="true"></div><div class="resize-handle-col"></div><div class="resize-handle-row"></div></td>
+          <td><div contenteditable="true"></div><div class="resize-handle-col"></div><div class="resize-handle-row"></div></td>
+        </tr>
+        <tr>
+          <td class="name-column"><div contenteditable="true">이준환</div><div class="resize-handle-col"></div><div class="resize-handle-row"></div></td>
+          <td><div contenteditable="true"></div><div class="resize-handle-col"></div><div class="resize-handle-row"></div></td>
+          <td><div contenteditable="true"></div><div class="resize-handle-col"></div><div class="resize-handle-row"></div></td>
+          <td><div contenteditable="true"></div><div class="resize-handle-col"></div><div class="resize-handle-row"></div></td>
+          <td><div contenteditable="true"></div><div class="resize-handle-col"></div><div class="resize-handle-row"></div></td>
+          <td><div contenteditable="true"></div><div class="resize-handle-col"></div><div class="resize-handle-row"></div></td>
+          <td><div contenteditable="true"></div><div class="resize-handle-col"></div><div class="resize-handle-row"></div></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
 </body>
 </html>
