@@ -88,12 +88,11 @@ def draw_card():
     if st.session_state.deck:
         return st.session_state.deck.pop()
     else:
-        return "Unknown" # 덱이 마를 일은 거의 없지만 예외처리
+        return "Unknown"
 
-# --- AI 로직 (조금 더 똑똑하게) ---
+# --- AI 로직 ---
 def ai_decide_action():
     ai = st.session_state.ai
-    player = st.session_state.player
     hand = get_alive_cards(ai)
     
     # 1. 킬각: 돈이 7원 이상이면 무조건 쿠
@@ -126,30 +125,24 @@ def ai_react_to_player(action_name):
     player_action = ACTIONS[action_name]
     
     # 1. 도전(Challenge) 로직
-    # 플레이어가 캐릭터 행동을 했는데, 내 손에 그 캐릭터가 2장 있다면 -> 상대는 100% 거짓말
     needed_role = player_action['role']
     if needed_role:
         my_dupes = hand.count(needed_role)
-        # 덱에 총 3장인데 내가 2장 들고 있으면 상대방이 가졌을 확률 극히 낮음 (나머지 1장이 덱에 있거나 상대한테 있거나)
         if my_dupes == 2: 
             return "Challenge"
     
-    # 일반적인 의심 (확률)
-    if needed_role and random.random() < 0.2: # 20% 확률로 그냥 찔러봄
+    if needed_role and random.random() < 0.2:
         return "Challenge"
 
     # 2. 방어(Block) 로직
-    # 암살 당할 때
     if action_name == "Assassinate":
-        if "Contessa" in hand: return "Block" # 있으면 무조건 막음
-        if random.random() < 0.4: return "Block" # 없어도 40% 확률로 귀부인인 척 함 (죽기 싫으니까)
+        if "Contessa" in hand: return "Block"
+        if random.random() < 0.4: return "Block"
         
-    # 갈취 당할 때
     if action_name == "Steal":
         if "Captain" in hand or "Ambassador" in hand: return "Block"
-        if random.random() < 0.3: return "Block" # 블러핑
+        if random.random() < 0.3: return "Block"
 
-    # 해외원조 막기 (공작인 척)
     if action_name == "Foreign Aid":
         if "Duke" in hand: return "Block"
         if random.random() < 0.2: return "Block"
@@ -162,7 +155,6 @@ def execute_action_result(actor_key, action_name):
     actor = st.session_state.player if actor_key == "Player" else st.session_state.ai
     target = st.session_state.ai if actor_key == "Player" else st.session_state.player
     
-    # 비용 지불
     cost = ACTIONS[action_name]["cost"]
     actor["coins"] -= cost
     
@@ -186,23 +178,18 @@ def execute_action_result(actor_key, action_name):
         lose_life(target)
         log(f"{target['name']}가 쿠를 맞아 카드를 잃었습니다.")
     elif action_name == "Exchange":
-        # Streamlit 단순화를 위해 자동 교환 (덱에서 2장 뽑고 랜덤으로 섞어서 2장 가짐)
-        # 실제로는 UI에서 선택해야 하지만 복잡도 때문에 간소화
         new_cards = [draw_card(), draw_card()]
         current_hand = get_alive_cards(actor)
         pool = current_hand + new_cards
         random.shuffle(pool)
         
-        # 살아있는 슬롯 수만큼 가짐
         lives = sum(actor["alive_cards"])
         keep = pool[:lives]
         return_deck = pool[lives:]
         
-        # 덱에 반환 및 셔플
         st.session_state.deck.extend(return_deck)
         random.shuffle(st.session_state.deck)
         
-        # 패 업데이트 (죽은 카드는 그대로 두고 산 카드만 교체)
         alive_idx = 0
         for i in range(2):
             if actor["alive_cards"][i]:
@@ -210,14 +197,12 @@ def execute_action_result(actor_key, action_name):
                 alive_idx += 1
         log(f"{actor['name']}가 카드를 교환했습니다.")
 
-    # 턴 넘기기
     st.session_state.current_action = None
     st.session_state.turn = "AI" if actor_key == "Player" else "Player"
     st.session_state.phase = "SELECT_ACTION"
     st.rerun()
 
 def lose_life(victim_dict):
-    # 살아있는 첫 번째 카드를 제거 (단순화)
     for i in range(2):
         if victim_dict["alive_cards"][i]:
             victim_dict["alive_cards"][i] = False
@@ -237,27 +222,24 @@ def resolve_challenge(challenger_key, target_key, role_claimed):
         log(f"❌ {challenger['name']}의 도전 실패! 패널티로 카드를 잃습니다.")
         lose_life(challenger)
         
-        # 인증한 카드는 덱에 넣고 새거 뽑기
         st.session_state.deck.append(role_claimed)
         random.shuffle(st.session_state.deck)
         
-        # 타겟의 해당 카드 교체
         for i in range(2):
             if target["alive_cards"][i] and target["cards"][i] == role_claimed:
                 target["cards"][i] = draw_card()
                 break
         
-        return "CHALLENGE_FAILED" # 도전 실패 -> 원래 행동 진행
+        return "CHALLENGE_FAILED" 
     else:
         # 블러핑 걸림: 타겟 패배
         log(f"🤥 {target['name']}는 {ROLE_KOREAN[role_claimed]} 카드가 없었습니다! (거짓말)")
         log(f"⚔️ {challenger['name']}의 도전 성공!")
         lose_life(target)
-        return "CHALLENGE_SUCCESS" # 도전 성공 -> 행동 취소
+        return "CHALLENGE_SUCCESS" 
 
 # --- UI 렌더링 ---
 
-# 사이드바 (게임 로그)
 with st.sidebar:
     st.header("📜 게임 로그")
     for msg in st.session_state.log:
@@ -265,14 +247,12 @@ with st.sidebar:
 
 st.title("🃏 Coup (쿠) : 심리 전략 게임")
 
-# 상단: AI 상태
 col1, col2, col3 = st.columns([1, 2, 1])
 
 with col1:
     st.subheader(f"🤖 {st.session_state.ai['name']}")
     st.metric("Coins", st.session_state.ai["coins"])
     
-    # AI 카드 표시 (뒷면 or 죽은 카드 공개)
     ai_cols = st.columns(2)
     for i in range(2):
         card_name = st.session_state.ai["cards"][i]
@@ -281,15 +261,13 @@ with col1:
             if not is_alive:
                 st.image(ROLE_IMAGES[card_name], caption=f"❌ {ROLE_KOREAN[card_name]}", width=80)
             else:
-                st.info("뒷면") # 살아있는 카드는 비공개
+                st.info("뒷면") 
 
-# 중앙: 메시지 및 게임판
 with col2:
     if st.session_state.current_action:
         act = st.session_state.current_action
         st.info(f"📢 현재 상황: {act['actor']}가 [{ACTIONS[act['action']]['desc']}] 시도 중...")
 
-# 하단: 플레이어 상태
 with col3:
     st.subheader(f"👤 {st.session_state.player['name']}")
     st.metric("Coins", st.session_state.player["coins"])
@@ -299,25 +277,21 @@ with col3:
         card_name = st.session_state.player["cards"][i]
         is_alive = st.session_state.player["alive_cards"][i]
         with p_cols[i]:
-            # 내 카드는 항상 보임
             opacity = 1.0 if is_alive else 0.5
             caption = ROLE_KOREAN[card_name] if is_alive else f"❌ {ROLE_KOREAN[card_name]}"
             st.image(ROLE_IMAGES[card_name], caption=caption, width=80)
 
-
 st.divider()
 
-# --- 게임 컨트롤러 (Phase에 따른 UI 변경) ---
+# --- 게임 컨트롤러 ---
 
-# 1. 플레이어 턴: 행동 선택
+# 1. 플레이어 턴
 if st.session_state.turn == "Player" and st.session_state.phase == "SELECT_ACTION":
     st.subheader("⚡ 당신의 차례입니다. 행동을 선택하세요.")
     
-    # 코인 10개 이상이면 쿠 강제
     if st.session_state.player["coins"] >= 10:
         if st.button("Coup (쿠) - 코인 10개 초과 강제"):
             st.session_state.current_action = {"actor": "Player", "action": "Coup", "target": "AI"}
-            # 쿠는 방어/도전 불가 -> 바로 실행
             execute_action_result("Player", "Coup")
     else:
         c1, c2, c3, c4 = st.columns(4)
@@ -325,7 +299,7 @@ if st.session_state.turn == "Player" and st.session_state.phase == "SELECT_ACTIO
         
         if c1.button("소득 (+1)"):
             st.session_state.current_action = {"actor": "Player", "action": "Income", "target": "AI"}
-            st.session_state.phase = "REACTION_WAIT" # 소득은 도전 불가지만 로직 통일성을 위해
+            st.session_state.phase = "REACTION_WAIT"
             st.rerun()
             
         if c2.button("해외원조 (+2)"):
@@ -363,17 +337,15 @@ if st.session_state.turn == "Player" and st.session_state.phase == "SELECT_ACTIO
             else:
                 st.warning("코인이 부족합니다 (7원 필요)")
 
-# 2. 플레이어 행동 후 -> AI 반응 처리
+# 2. 플레이어 행동 후 -> AI 반응
 if st.session_state.turn == "Player" and st.session_state.phase == "REACTION_WAIT":
     action = st.session_state.current_action["action"]
     
-    # Income은 반응 없음
     if action == "Income":
         execute_action_result("Player", "Income")
-    
     else:
         with st.spinner("AI가 고민 중입니다..."):
-            time.sleep(1) # 긴장감 조성
+            time.sleep(1) 
             reaction = ai_react_to_player(action)
         
         if reaction == "Pass":
@@ -383,9 +355,9 @@ if st.session_state.turn == "Player" and st.session_state.phase == "REACTION_WAI
         elif reaction == "Challenge":
             st.warning(f"🚨 AI가 당신의 [{ACTIONS[action]['role']}] 신분에 도전했습니다!")
             result = resolve_challenge("AI", "Player", ACTIONS[action]["role"])
-            if result == "CHALLENGE_FAILED": # 내가 참말 -> 행동 진행
+            if result == "CHALLENGE_FAILED": 
                 execute_action_result("Player", action)
-            else: # 내가 거짓말 -> 턴 종료
+            else: 
                 st.session_state.current_action = None
                 st.session_state.turn = "AI"
                 st.session_state.phase = "SELECT_ACTION"
@@ -393,23 +365,22 @@ if st.session_state.turn == "Player" and st.session_state.phase == "REACTION_WAI
                 
         elif reaction == "Block":
             st.warning("🛡️ AI가 방어를 시도합니다!")
-            # 방어에 대한 플레이어의 도전 여부 (여기서 UI가 멈춰야 함)
             st.session_state.phase = "PLAYER_CHALLENGE_BLOCK"
             st.rerun()
 
-# 3. AI가 방어했을 때 -> 플레이어가 도전할지 말지
+# 3. AI 방어 후 -> 플레이어 선택
 if st.session_state.phase == "PLAYER_CHALLENGE_BLOCK":
     st.subheader("AI가 방어했습니다. 도전하시겠습니까?")
     col1, col2 = st.columns(2)
     
     act = st.session_state.current_action["action"]
-    block_role = "Contessa" if act == "Assassinate" else ("Duke" if act == "Foreign Aid" else "Captain") # 단순화
+    block_role = "Contessa" if act == "Assassinate" else ("Duke" if act == "Foreign Aid" else "Captain")
     
     if col1.button("도전하기 (거짓말이다!)"):
         result = resolve_challenge("Player", "AI", block_role)
-        if result == "CHALLENGE_SUCCESS": # AI 거짓말 -> 방어 실패 -> 원래 행동 적용
+        if result == "CHALLENGE_SUCCESS": 
             execute_action_result("Player", act)
-        else: # AI 참말 -> 방어 성공 -> 내 턴 종료
+        else:
             st.session_state.current_action = None
             st.session_state.turn = "AI"
             st.session_state.phase = "SELECT_ACTION"
@@ -422,5 +393,74 @@ if st.session_state.phase == "PLAYER_CHALLENGE_BLOCK":
         st.session_state.phase = "SELECT_ACTION"
         st.rerun()
 
-# 4. AI 턴: 행동 선택 및 실행
+# 4. AI 턴: 행동 선택
 if st.session_state.turn == "AI" and st.session_state.phase == "SELECT_ACTION":
+    with st.spinner("AI가 행동을 선택 중입니다..."):
+        time.sleep(1)
+        ai_act_name = ai_decide_action()
+        st.session_state.current_action = {"actor": "AI", "action": ai_act_name, "target": "Player"}
+        
+        if ai_act_name in ["Coup", "Income"]:
+            execute_action_result("AI", ai_act_name)
+        else:
+            st.session_state.phase = "PLAYER_REACTION_WAIT"
+            st.rerun()
+
+# 5. AI 행동 후 -> 플레이어 반응
+if st.session_state.turn == "AI" and st.session_state.phase == "PLAYER_REACTION_WAIT":
+    act_name = st.session_state.current_action["action"]
+    role_needed = ACTIONS[act_name]["role"]
+    
+    st.error(f"⚠️ AI가 [{ACTIONS[act_name]['desc']}] 을(를) 선언했습니다!")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    if col1.button("허용하기"):
+        execute_action_result("AI", act_name)
+        
+    if role_needed and col2.button("도전하기 (블러핑 의심)"):
+        result = resolve_challenge("Player", "AI", role_needed)
+        if result == "CHALLENGE_SUCCESS":
+            st.session_state.current_action = None
+            st.session_state.turn = "Player"
+            st.session_state.phase = "SELECT_ACTION"
+            st.rerun()
+        else:
+             execute_action_result("AI", act_name)
+
+    can_block = False
+    block_btn_text = ""
+    my_block_role = ""
+    
+    if act_name == "Foreign Aid":
+        can_block = True
+        block_btn_text = "공작으로 막기"
+        my_block_role = "Duke"
+    elif act_name == "Assassinate":
+        can_block = True
+        block_btn_text = "귀부인으로 막기"
+        my_block_role = "Contessa"
+    elif act_name == "Steal":
+        can_block = True
+        block_btn_text = "사령관/대사로 막기"
+        my_block_role = "Captain" 
+    
+    if can_block and col3.button(block_btn_text):
+        log(f"🛡️ 당신이 {my_block_role} 신분으로 방어를 시도했습니다.")
+        
+        if ai_react_to_player(act_name) == "Challenge":
+             st.warning("🚨 AI가 당신의 방어에 도전했습니다!")
+             result = resolve_challenge("AI", "Player", my_block_role)
+             if result == "CHALLENGE_FAILED":
+                 st.session_state.current_action = None
+                 st.session_state.turn = "Player"
+                 st.session_state.phase = "SELECT_ACTION"
+                 st.rerun()
+             else:
+                 execute_action_result("AI", act_name)
+        else:
+            log("AI가 방어를 인정했습니다.")
+            st.session_state.current_action = None
+            st.session_state.turn = "Player"
+            st.session_state.phase = "SELECT_ACTION"
+            st.rerun()
